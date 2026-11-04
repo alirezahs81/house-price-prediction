@@ -1,0 +1,30 @@
+# Development dependencies
+# Install: pip install -r requirements-dev.txt
+
+# Core dependencies (from requirements.txt)
+-r requirements.txt
+
+# Code quality
+black==24.10.0
+isort==5.13.2
+flake8==7.1.1
+flake8-bugbear==24.9.2
+pre-commit==3.8.0
+
+# Type checking
+mypy==1.13.0
+pandas-stubs==2.2.0
+numpy-stubs==1.5.0
+
+# Testing
+pytest-cov==5.0.0
+pytest-mock==3.14.0
+
+# Documentation
+mkdocs==1.6.1
+mkdocs-material==9.5.27
+mkdocstrings[python]==0.26.1
+
+# Optional: for notebook development
+jupyterlab==4.2.5
+ipykernel==6.29.5

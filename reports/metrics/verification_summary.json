@@ -1,0 +1,28 @@
+{
+  "pytest": "7 passed",
+  "python_compileall": "passed",
+  "notebooks_validated": 3,
+  "training_rows": 1460,
+  "test_rows": 1459,
+  "prediction_rows": 1459,
+  "prediction_schema": [
+    "Id",
+    "SalePrice"
+  ],
+  "predictions_finite_and_positive": true,
+  "model_artifact_created": true,
+  "training_metrics": {
+    "MAE": 16496.65136641402,
+    "MSE": 878288322.7082283,
+    "RMSE": 29635.929590755684,
+    "R2": 0.8854953102404866,
+    "RMSLE": 0.13638051814679758,
+    "selected_model": "GradientBoosting",
+    "best_params": {
+      "model__n_estimators": 350,
+      "model__max_depth": 2,
+      "model__learning_rate": 0.05
+    },
+    "validation_rows": 292
+  }
+}

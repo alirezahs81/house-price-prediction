@@ -1,0 +1,109 @@
+name: train-and-validate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'data/raw/**'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'data/raw/**'
+      - 'requirements.txt'
+      - 'pyproject.toml'
+  workflow_dispatch:
+
+jobs:
+  train:
+    name: Train and Validate Model
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run exploratory analysis
+        run: python -m main eda
+
+      - name: Train model
+        run: python -m main train
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Validate predictions
+        run: python -m main predict
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Check prediction output
+        run: |
+          echo "Checking prediction file..."
+          head -5 reports/predictions.csv
+          echo "Row count: $(wc -l < reports/predictions.csv)"
+
+      - name: Upload model artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trained-model
+          path: models/best_model.joblib
+          retention-days: 7
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: training-reports
+          path: reports/
+          retention-days: 7
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const metricsPath = 'reports/metrics/validation_metrics.json';
+            if (fs.existsSync(metricsPath)) {
+              const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
+              const body = `## Model Training Results
+              
+              **Selected Model:** ${metrics.selected_model}
+              
+              **Validation Metrics:**
+              - MAE: $${metrics.MAE.toLocaleString(undefined, {maximumFractionDigits: 2})}
+              - RMSE: $${metrics.RMSE.toLocaleString(undefined, {maximumFractionDigits: 2})}
+              - R²: ${metrics.R2.toFixed(4)}
+              - RMSLE: ${metrics.RMSLE.toFixed(4)}
+              
+              **Best Parameters:** ${JSON.stringify(metrics.best_params, null, 2)}
+              
+              *Generated from workflow run ${github.run_number}*`;
+              
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }
