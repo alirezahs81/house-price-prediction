@@ -53,7 +53,7 @@ def run_eda(path: str | Path = TRAIN_FILE) -> dict[str, Any]:
     )
     if len(top_categories):
         fig, axes = plt.subplots(4, 3, figsize=(15, 16))
-        for axis, column in zip(axes.flat, top_categories):
+        for axis, column in zip(axes.flat, top_categories, strict=False):
             categorical[column].fillna("Missing").value_counts().head(10).plot(
                 kind="bar", ax=axis
             )

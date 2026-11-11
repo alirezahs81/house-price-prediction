@@ -89,19 +89,19 @@ jobs:
             if (fs.existsSync(metricsPath)) {
               const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
               const body = `## Model Training Results
-              
+
               **Selected Model:** ${metrics.selected_model}
-              
+
               **Validation Metrics:**
               - MAE: $${metrics.MAE.toLocaleString(undefined, {maximumFractionDigits: 2})}
               - RMSE: $${metrics.RMSE.toLocaleString(undefined, {maximumFractionDigits: 2})}
               - R²: ${metrics.R2.toFixed(4)}
               - RMSLE: ${metrics.RMSLE.toFixed(4)}
-              
+
               **Best Parameters:** ${JSON.stringify(metrics.best_params, null, 2)}
-              
+
               *Generated from workflow run ${github.run_number}*`;
-              
+
               github.rest.issues.createComment({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
