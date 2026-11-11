@@ -1,3 +1,4 @@
+
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -21,7 +22,7 @@ dev = [
     "black==24.10.0",
     "isort==5.13.2",
     "flake8==7.1.1",
-    "flake8-bugbear==24.9.2",
+    "flake8-bugbear==24.10.31",
     "pre-commit==3.8.0",
     "mypy==1.13.0",
     "pandas-stubs==2.2.0",
@@ -34,20 +35,22 @@ dev = [
     "jupyterlab==4.2.5",
     "ipykernel==6.29.5",
 ]
+
 docs = [
     "mkdocs==1.6.1",
     "mkdocs-material==9.5.27",
     "mkdocstrings[python]==0.26.1",
 ]
+
 notebook = [
     "jupyterlab==4.2.5",
     "ipykernel==6.29.5",
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/house-price-prediction"
-Repository = "https://github.com/yourusername/house-price-prediction"
-Issues = "https://github.com/yourusername/house-price-prediction/issues"
+Homepage = "https://github.com/alirezahs81/house-price-prediction"
+Repository = "https://github.com/alirezahs81/house-price-prediction"
+Issues = "https://github.com/alirezahs81/house-price-prediction/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -63,7 +66,6 @@ target-version = ['py310']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
-  # directories
   \.git
   | \.venv
   | venv
@@ -99,14 +101,14 @@ ignore_missing_imports = true
 max-line-length = 88
 extend-ignore = "E203,W503"
 select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "C",   # mccabe complexity
-    "B",   # bugbear
-    "B9",  # bugbear
+    "E",
+    "W",
+    "F",
+    "C",
+    "B",
+    "B9",
 ]
-per-file-ignores = { "tests/*" = "S101" }  # Allow assert in tests
+per-file-ignores = { "tests/*" = "S101" }
 
 [tool.coverage.run]
 source = ["src"]
