@@ -1,3 +1,4 @@
+
 name: tests
 
 on:
@@ -6,32 +7,62 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     name: Lint and Type Check
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements.txt
-      - run: pip install pre-commit
-      - run: pre-commit run --all-files
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run pre-commit checks
+        run: pre-commit run --all-files
 
   pytest:
     name: Unit Tests
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements.txt
-      - run: pytest -v --cov=src --cov-report=xml --cov-report=term-missing
-      - name: Upload coverage
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run tests and generate coverage reports
+        run: |
+          python -m pytest -v --cov=src --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: always()
         with:
