@@ -1,5 +1,6 @@
 """Input schema and data-quality validation."""
 
+import numpy as np
 import pandas as pd
 
 
@@ -11,12 +12,20 @@ def validate_training_data(
         raise ValueError("Dataset is empty.")
     if target not in frame:
         raise ValueError(f"Required target column {target!r} is missing.")
-    if frame[target].isna().any():
-        raise ValueError(f"Target column {target!r} contains missing values.")
-    if (frame[target] <= 0).any():
+
+    target_values = pd.to_numeric(frame[target], errors="coerce").to_numpy(
+        dtype=float
+    )
+    if not np.isfinite(target_values).all():
+        raise ValueError(f"Target column {target!r} must contain finite numbers.")
+    if (target_values <= 0).any():
         raise ValueError("Target values must be strictly positive for log modeling.")
-    if "Id" in frame and frame["Id"].duplicated().any():
-        raise ValueError("Duplicate Id values found.")
+
+    if "Id" in frame:
+        if frame["Id"].isna().any():
+            raise ValueError("Id contains missing values.")
+        if frame["Id"].duplicated().any():
+            raise ValueError("Duplicate Id values found.")
 
 
 def validate_prediction_data(frame: pd.DataFrame) -> None:

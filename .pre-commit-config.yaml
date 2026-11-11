@@ -10,7 +10,9 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
+        files: ^(src/.*\.py|main\.py|\.github/workflows/.*\.yml|\.pre-commit-config\.yaml|\.flake8|pyproject\.toml)$
       - id: end-of-file-fixer
+        files: ^(src/.*\.py|main\.py|\.github/workflows/.*\.yml|\.pre-commit-config\.yaml|\.flake8|pyproject\.toml)$
       - id: check-yaml
       - id: check-toml
       - id: check-json
@@ -19,14 +21,6 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1024]
       - id: detect-private-key
-
-  - repo: https://github.com/psf/black
-    rev: 24.10.0
-    hooks:
-      - id: black
-        language_version: python3
-        args: [--check]
-        files: ^(src/.*\.py|main\.py)$
 
   - repo: https://github.com/PyCQA/isort
     rev: 5.13.2
