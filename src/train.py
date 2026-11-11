@@ -107,40 +107,102 @@ def train() -> dict[str, Any]:
         random_state=RANDOM_STATE,
     )
     rows: list[dict[str, Any]] = []
+    tuning_rows: list[dict[str, Any]] = []
+    candidate_results: dict[str, dict[str, Any]] = {}
 
+    # Every model family is evaluated with the same shuffled five-fold split.
+    # Families with search spaces receive the same randomized-search budget;
+    # families without tunable parameters are evaluated directly on those folds.
     for name, estimator in candidate_models().items():
-        LOGGER.info("Repeated cross-validating %s", name)
+        LOGGER.info("Tuning and cross-validating %s", name)
         pipeline = make_pipeline(estimator, X_train)
+        params = _search_space(name)
         started = time.time()
-        scores = cross_val_score(
-            pipeline,
-            X_train,
-            y_train,
-            cv=model_cv,
-            scoring="neg_root_mean_squared_error",
-            n_jobs=1,
-        )
+
+        if params:
+            search = RandomizedSearchCV(
+                pipeline,
+                params,
+                n_iter=8,
+                scoring="neg_root_mean_squared_error",
+                cv=tuning_cv,
+                random_state=RANDOM_STATE,
+                n_jobs=1,
+                refit=True,
+                return_train_score=False,
+            )
+            search.fit(X_train, y_train)
+            selected_estimator = search.best_estimator_
+            best_params = search.best_params_
+            cv_mean = float(-search.best_score_)
+            cv_std = float(search.cv_results_["std_test_score"][search.best_index_])
+
+            for index, candidate_params in enumerate(search.cv_results_["params"]):
+                tuning_rows.append(
+                    {
+                        "model": name,
+                        "params": candidate_params,
+                        "cv_log_rmse_mean": float(
+                            -search.cv_results_["mean_test_score"][index]
+                        ),
+                        "cv_log_rmse_std": float(
+                            search.cv_results_["std_test_score"][index]
+                        ),
+                        "rank": int(search.cv_results_["rank_test_score"][index]),
+                    }
+                )
+        else:
+            scores = cross_val_score(
+                pipeline,
+                X_train,
+                y_train,
+                cv=tuning_cv,
+                scoring="neg_root_mean_squared_error",
+                n_jobs=1,
+            )
+            selected_estimator = pipeline.fit(X_train, y_train)
+            best_params = {}
+            cv_mean = float(-scores.mean())
+            cv_std = float(scores.std())
+            tuning_rows.append(
+                {
+                    "model": name,
+                    "params": {},
+                    "cv_log_rmse_mean": cv_mean,
+                    "cv_log_rmse_std": cv_std,
+                    "rank": 1,
+                }
+            )
+
+        candidate_results[name] = {
+            "estimator": selected_estimator,
+            "best_params": best_params,
+        }
         rows.append(
             {
                 "model": name,
-                "cv_log_rmse_mean": float(-scores.mean()),
-                "cv_log_rmse_std": float(scores.std()),
-                "cv_folds": int(len(scores)),
+                "cv_log_rmse_mean": cv_mean,
+                "cv_log_rmse_std": cv_std,
+                "cv_folds": 5,
                 "cv_seconds": round(time.time() - started, 2),
             }
         )
 
     results = pd.DataFrame(rows).sort_values("cv_log_rmse_mean")
+    tuning_results = pd.DataFrame(tuning_rows).sort_values(
+        "cv_log_rmse_mean"
+    )
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     results.to_csv(REPORTS_DIR / "model_comparison.csv", index=False)
+    tuning_results.to_csv(REPORTS_DIR / "tuning_comparison.csv", index=False)
 
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.barh(results["model"], results["cv_log_rmse_mean"])
     ax.set(
-        xlabel="Repeated 5x2 CV RMSE (log-price)",
-        title="Candidate Model Comparison",
+        xlabel="Tuned 5-fold CV RMSE (log-price)",
+        title="Tuned Candidate Model Comparison",
     )
     ax.invert_yaxis()
     fig.tight_layout()
@@ -149,36 +211,9 @@ def train() -> dict[str, Any]:
 
     best_name = str(results.iloc[0]["model"])
     best_cv_row = results.iloc[0]
-    LOGGER.info("Best cross-validated model family: %s", best_name)
-    base_pipeline = make_pipeline(candidate_models()[best_name], X_train)
-    params = _search_space(best_name)
-
-    if params:
-        search = RandomizedSearchCV(
-            base_pipeline,
-            params,
-            n_iter=8,
-            scoring="neg_root_mean_squared_error",
-            cv=tuning_cv,
-            random_state=RANDOM_STATE,
-            n_jobs=1,
-            refit=True,
-        )
-        search.fit(X_train, y_train)
-        selected = search.best_estimator_
-        best_params = search.best_params_
-
-        # Keep the full tuning leaderboard so alternative losses and parameter
-        # combinations can be reviewed rather than reporting only the winner.
-        tuning_results = pd.DataFrame(search.cv_results_)
-        tuning_results["cv_log_rmse_mean"] = -tuning_results["mean_test_score"]
-        tuning_results["cv_log_rmse_std"] = tuning_results["std_test_score"]
-        tuning_results.sort_values("rank_test_score").to_csv(
-            REPORTS_DIR / "tuning_comparison.csv", index=False
-        )
-    else:
-        selected = base_pipeline.fit(X_train, y_train)
-        best_params = {}
+    LOGGER.info("Best tuned cross-validated model family: %s", best_name)
+    selected = candidate_results[best_name]["estimator"]
+    best_params = candidate_results[best_name]["best_params"]
 
     # Re-evaluate the chosen configuration on repeated folds that differ from
     # the single KFold used by RandomizedSearchCV. The final holdout remains
@@ -257,10 +292,11 @@ def train() -> dict[str, Any]:
                 "tuning_comparison.csv",
             ],
             "cv_metric_note": (
-                "Candidate-family scores are untuned repeated-CV results. "
-                "The selected configuration is re-evaluated on repeated folds "
-                "within the training partition. The final holdout is excluded "
-                "from model and hyperparameter selection."
+                "All candidate families use the same shuffled five-fold CV; "
+                "supported families receive the same eight-iteration randomized "
+                "search budget. The selected configuration is additionally "
+                "evaluated on repeated folds within the training partition. "
+                "The final holdout is excluded from all selection and tuning."
             ),
         }
     )
