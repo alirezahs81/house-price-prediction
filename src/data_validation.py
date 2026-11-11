@@ -1,7 +1,12 @@
 """Input schema and data-quality validation."""
+
 import pandas as pd
 
-def validate_training_data(frame: pd.DataFrame, target: str = "SalePrice") -> None:
+
+def validate_training_data(
+    frame: pd.DataFrame, target: str = "SalePrice"
+) -> None:
+    """Raise ValueError when the training frame violates its expected schema."""
     if frame.empty:
         raise ValueError("Dataset is empty.")
     if target not in frame:
@@ -13,7 +18,9 @@ def validate_training_data(frame: pd.DataFrame, target: str = "SalePrice") -> No
     if "Id" in frame and frame["Id"].duplicated().any():
         raise ValueError("Duplicate Id values found.")
 
+
 def validate_prediction_data(frame: pd.DataFrame) -> None:
+    """Raise ValueError when prediction input violates its expected schema."""
     if frame.empty:
         raise ValueError("Prediction input is empty.")
     if "SalePrice" in frame:
@@ -22,3 +29,5 @@ def validate_prediction_data(frame: pd.DataFrame) -> None:
         raise ValueError("Prediction input must include Id.")
     if frame["Id"].isna().any():
         raise ValueError("Id contains missing values.")
+    if frame["Id"].duplicated().any():
+        raise ValueError("Prediction input contains duplicate Id values.")
