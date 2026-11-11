@@ -1,8 +1,13 @@
-# Pre-commit hooks configuration
-# Install: pip install pre-commit && pre-commit install
-# Run manually: pre-commit run --all-files
+
+minimum_pre_commit_version: "3.8.0"
+
+default_language_version:
+  python: python3
+
+fail_fast: false
 
 repos:
+  # Basic checks for whitespace, file formats, merge conflicts and secrets
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:
@@ -12,37 +17,44 @@ repos:
       - id: check-toml
       - id: check-json
       - id: check-merge-conflict
-      - id: debug-logger
-      - id: check-docstring-first
+      - id: debug-statements
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key
 
+  # Python code formatting
   - repo: https://github.com/psf/black
     rev: 24.10.0
     hooks:
       - id: black
-        args: [--line-length=88]
-        language_version: python3.10
+        language_version: python3
+        args: [--check]
 
-  - repo: https://github.com/pycqa/isort
+  # Import sorting
+  - repo: https://github.com/PyCQA/isort
     rev: 5.13.2
     hooks:
       - id: isort
-        args: [--profile=black, --line-length=88]
+        args: [--check-only, --diff]
 
-  - repo: https://github.com/pycqa/flake8
+  # Python linting
+  - repo: https://github.com/PyCQA/flake8
     rev: 7.1.1
     hooks:
       - id: flake8
-        args: [--max-line-length=88, --extend-ignore=E203,W503]
-        additional_dependencies: [flake8-bugbear]
+        additional_dependencies:
+          - flake8-bugbear==24.9.2
 
+  # Static type checking
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.13.0
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports, --disallow-untyped-defs]
-        additional_dependencies: [types-requests, pandas-stubs, numpy-stubs]
+        args: [--ignore-missing-imports]
+        files: ^src/.*\.py$
 
-  - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+  # Validate the pre-commit configuration itself
+  - repo: meta
     hooks:
-      - id: requirements-txt-fixer
+      - id: check-hooks-apply
+      - id: check-useless-excludes
