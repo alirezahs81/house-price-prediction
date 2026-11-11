@@ -63,6 +63,8 @@ def _search_space(model_name: str) -> dict[str, list[Any]]:
             "model__max_depth": [1, 2, 3],
             "model__min_samples_leaf": [2, 4, 6, 8],
             "model__subsample": [0.7, 0.85, 1.0],
+            "model__loss": ["huber", "squared_error", "absolute_error"],
+            "model__alpha": [0.85, 0.9, 0.95],
         },
         "HistGradientBoosting": {
             "model__max_iter": [150, 250, 400, 600],
@@ -165,9 +167,32 @@ def train() -> dict[str, Any]:
         search.fit(X_train, y_train)
         selected = search.best_estimator_
         best_params = search.best_params_
+
+        # Keep the full tuning leaderboard so alternative losses and parameter
+        # combinations can be reviewed rather than reporting only the winner.
+        tuning_results = pd.DataFrame(search.cv_results_)
+        tuning_results["cv_log_rmse_mean"] = -tuning_results["mean_test_score"]
+        tuning_results["cv_log_rmse_std"] = tuning_results["std_test_score"]
+        tuning_results.sort_values("rank_test_score").to_csv(
+            REPORTS_DIR / "tuning_comparison.csv", index=False
+        )
     else:
         selected = base_pipeline.fit(X_train, y_train)
         best_params = {}
+
+    # Re-evaluate the chosen configuration on repeated folds that differ from
+    # the single KFold used by RandomizedSearchCV. The final holdout remains
+    # excluded from every selection and tuning operation.
+    tuned_cv_scores = cross_val_score(
+        selected,
+        X_train,
+        y_train,
+        cv=model_cv,
+        scoring="neg_root_mean_squared_error",
+        n_jobs=1,
+    )
+    tuned_cv_log_rmse_mean = float(-tuned_cv_scores.mean())
+    tuned_cv_log_rmse_std = float(tuned_cv_scores.std())
 
     train_log_predictions = selected.predict(X_train)
     validation_log_predictions = selected.predict(X_val)
@@ -209,12 +234,18 @@ def train() -> dict[str, Any]:
             "best_params": best_params,
             "validation_rows": int(len(y_val)),
             "repeated_cv_folds": 10,
-            "cv_log_rmse_mean": float(best_cv_row["cv_log_rmse_mean"]),
-            "cv_log_rmse_std": float(best_cv_row["cv_log_rmse_std"]),
-            "train_log_rmse": train_log_rmse,
+            "selected_family_cv_log_rmse_mean": float(
+                best_cv_row["cv_log_rmse_mean"]
+            ),
+            "selected_family_cv_log_rmse_std": float(
+                best_cv_row["cv_log_rmse_std"]
+            ),
+            "in_sample_train_log_rmse": train_log_rmse,
             "validation_log_rmse": validation_log_rmse,
-            "log_rmse_generalization_gap": (
-                validation_log_rmse - train_log_rmse
+            "tuned_cv_log_rmse_mean": tuned_cv_log_rmse_mean,
+            "tuned_cv_log_rmse_std": tuned_cv_log_rmse_std,
+            "validation_minus_tuned_cv_log_rmse": (
+                validation_log_rmse - tuned_cv_log_rmse_mean
             ),
             "target_transform": "log1p; predictions inverse-transformed with expm1",
             "holdout_used_for_model_selection": False,
@@ -222,10 +253,14 @@ def train() -> dict[str, Any]:
                 "validation_residuals.csv",
                 "worst_validation_errors.csv",
                 "validation_error_by_price_band.csv",
+                "model_comparison.csv",
+                "tuning_comparison.csv",
             ],
             "cv_metric_note": (
-                "CV scores compare untuned candidate families; holdout metrics "
-                "evaluate the tuned selected estimator."
+                "Candidate-family scores are untuned repeated-CV results. "
+                "The selected configuration is re-evaluated on repeated folds "
+                "within the training partition. The final holdout is excluded "
+                "from model and hyperparameter selection."
             ),
         }
     )
