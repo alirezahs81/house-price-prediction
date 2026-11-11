@@ -29,7 +29,7 @@ from src.config import (
 )
 from src.data_loader import load_train
 from src.data_validation import validate_training_data
-from src.evaluate import save_diagnostics
+from src.evaluate import regression_metrics, save_diagnostics
 from src.exploratory_analysis import run_eda
 from src.modeling import candidate_models, make_pipeline
 from src.preprocessing import prepare_features, transform_absence_categories
@@ -181,9 +181,26 @@ def train() -> dict[str, Any]:
         np.expm1(validation_log_predictions), 1.0
     )
     validation_actual = np.expm1(y_val)
+    validation_ids = (
+        df.loc[X_val.index, "Id"].to_numpy() if "Id" in df.columns else None
+    )
     metrics: dict[str, Any] = save_diagnostics(
         validation_actual,
         validation_predictions,
+        sample_ids=validation_ids,
+    )
+
+    # Compare against a simple training-only median baseline.
+    baseline = DummyRegressor(strategy="median").fit(X_train, y_train)
+    baseline_predictions = np.maximum(
+        np.expm1(baseline.predict(X_val)), 1.0
+    )
+    baseline_metrics = regression_metrics(validation_actual, baseline_predictions)
+    metrics.update(
+        {f"baseline_{key}": value for key, value in baseline_metrics.items()}
+    )
+    metrics["holdout_RMSE_improvement_vs_baseline"] = float(
+        1.0 - metrics["RMSE"] / baseline_metrics["RMSE"]
     )
     metrics.update(
         {
@@ -200,6 +217,15 @@ def train() -> dict[str, Any]:
             ),
             "target_transform": "log1p; predictions inverse-transformed with expm1",
             "holdout_used_for_model_selection": False,
+            "validation_error_reports": [
+                "validation_residuals.csv",
+                "worst_validation_errors.csv",
+                "validation_error_by_price_band.csv",
+            ],
+            "cv_metric_note": (
+                "CV scores compare untuned candidate families; holdout metrics "
+                "evaluate the tuned selected estimator."
+            ),
         }
     )
     (METRICS_DIR / "validation_metrics.json").write_text(
