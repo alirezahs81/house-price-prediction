@@ -43,7 +43,7 @@ Python 3.10+ is required.
 
 ```bash
 # Clone and setup
-git clone https://github.com/yourusername/house-price-prediction.git
+git clone https://github.com/alirezahs81/house-price-prediction.git
 cd house-price-prediction
 
 # Create virtual environment
@@ -102,9 +102,9 @@ The same deterministic feature function is applied to train and inference data. 
 
 ## Modeling and validation
 
-The project compares Ridge, Decision Tree, Random Forest, Extra Trees, Gradient Boosting, and HistGradientBoosting. It ranks candidates by five-fold shuffled K-fold RMSE in log-price space, then performs a modest randomized hyperparameter search for the winning tree ensemble when supported. A fixed seed makes the split and CV reproducible. A validation split is used for a final diagnostic report; the selected pipeline is refit on all labeled rows for test inference. All preprocessing is part of the saved sklearn Pipeline.
+The project compares a median baseline, Ridge, Decision Tree, Random Forest, Extra Trees, Gradient Boosting, and HistGradientBoosting. It first reserves a final holdout that is excluded from all model and hyperparameter selection. Each tunable family receives the same bounded eight-iteration randomized search using shuffled five-fold CV on the training partition. The selected configuration from every family is then compared using the same repeated five-fold CV (five folds repeated twice) on that training partition. The untouched holdout is evaluated once for final diagnostics, after which the selected pipeline is refit on all labeled rows for test inference. Imputers, scalers, and encoders are fitted inside each cross-validation fold. All preprocessing is part of the saved sklearn Pipeline.
 
-Metrics include MAE, MSE, RMSE, R² and RMSLE. The completed run selected **Gradient Boosting** (best mean five-fold CV log-RMSE among the candidates: **0.12852**; HistGradientBoosting: 0.13042). The randomized search selected 350 estimators, depth 2, and learning rate 0.05. On the held-out 292-row validation split, observed metrics were **MAE 16,496.65**, **RMSE 29,635.93**, **R² 0.8855**, **RMSLE 0.13638** (MSE 878,288,322.71). These are this run's results, not a guarantee of future performance. Results are saved in `reports/model_comparison.csv`, `reports/metrics/validation_metrics.json`, and related files.
+Metrics include MAE, MSE, RMSE, R² and RMSLE on the original price scale, plus cross-validation log-RMSE, its fold-to-fold standard deviation, training log-RMSE, validation log-RMSE, and their generalization gap. The training report records the selected model, search parameters, number of validation rows, target transform, and confirms that the holdout was not used for model selection. Metrics are generated on each run and saved in `reports/model_comparison.csv`, `reports/metrics/validation_metrics.json`, and related files; previous run-specific scores are intentionally not hard-coded here.
 
 ## Run
 
@@ -160,7 +160,7 @@ GitHub Actions runs pytest and linting on pushes and pull requests. The tests co
 
 ## CI/CD
 
-- **Tests workflow** (`.github/workflows/tests.yml`): Runs linting (black, isort, flake8, mypy) and pytest with coverage on every push/PR
+- **Tests workflow** (`.github/workflows/tests.yml`): Runs pre-commit checks (isort, flake8, mypy, and file validation) plus pytest with coverage on every push/PR
 - **Train workflow** (`.github/workflows/train.yml`): Runs full training pipeline on pushes to main, uploads model and reports as artifacts
 
 ## Development

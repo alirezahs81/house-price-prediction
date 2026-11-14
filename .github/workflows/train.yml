@@ -20,20 +20,21 @@ on:
 jobs:
   train:
     name: Train and Validate Model
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
       actions: read
+      issues: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -64,14 +65,14 @@ jobs:
           echo "Row count: $(wc -l < reports/predictions.csv)"
 
       - name: Upload model artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: trained-model
           path: models/best_model.joblib
           retention-days: 7
 
       - name: Upload reports
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: training-reports
           path: reports/
@@ -79,7 +80,7 @@ jobs:
 
       - name: Comment PR with results
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
@@ -87,20 +88,20 @@ jobs:
             if (fs.existsSync(metricsPath)) {
               const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
               const body = `## Model Training Results
-              
+
               **Selected Model:** ${metrics.selected_model}
-              
+
               **Validation Metrics:**
               - MAE: $${metrics.MAE.toLocaleString(undefined, {maximumFractionDigits: 2})}
               - RMSE: $${metrics.RMSE.toLocaleString(undefined, {maximumFractionDigits: 2})}
               - R²: ${metrics.R2.toFixed(4)}
               - RMSLE: ${metrics.RMSLE.toFixed(4)}
-              
+
               **Best Parameters:** ${JSON.stringify(metrics.best_params, null, 2)}
-              
-              *Generated from workflow run ${github.run_number}*`;
-              
-              github.rest.issues.createComment({
+
+              *Generated from workflow run ${process.env.GITHUB_RUN_NUMBER}*`;
+
+              await github.rest.issues.createComment({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
