@@ -99,9 +99,9 @@ jobs:
 
               **Best Parameters:** ${JSON.stringify(metrics.best_params, null, 2)}
 
-              *Generated from workflow run ${github.run_number}*`;
+              *Generated from workflow run ${process.env.GITHUB_RUN_NUMBER}*`;
 
-              github.rest.issues.createComment({
+              await github.rest.issues.createComment({
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,

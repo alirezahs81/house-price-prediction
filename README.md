@@ -43,7 +43,7 @@ Python 3.10+ is required.
 
 ```bash
 # Clone and setup
-git clone https://github.com/yourusername/house-price-prediction.git
+git clone https://github.com/alirezahs81/house-price-prediction.git
 cd house-price-prediction
 
 # Create virtual environment
@@ -160,7 +160,7 @@ GitHub Actions runs pytest and linting on pushes and pull requests. The tests co
 
 ## CI/CD
 
-- **Tests workflow** (`.github/workflows/tests.yml`): Runs linting (black, isort, flake8, mypy) and pytest with coverage on every push/PR
+- **Tests workflow** (`.github/workflows/tests.yml`): Runs pre-commit checks (isort, flake8, mypy, and file validation) plus pytest with coverage on every push/PR
 - **Train workflow** (`.github/workflows/train.yml`): Runs full training pipeline on pushes to main, uploads model and reports as artifacts
 
 ## Development
