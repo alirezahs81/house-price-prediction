@@ -40,3 +40,26 @@ def test_preprocessor_handles_unseen_categories():
         "imputer"
     ]
     assert numeric_imputer.statistics_[0] == 2.0
+
+
+
+def test_target_and_identifier_do_not_change_model_features():
+    frame = pd.DataFrame(
+        {
+            "Id": [1, 2, 3],
+            "SalePrice": [100000, 150000, 200000],
+            "LotArea": [5000, 7000, 9000],
+            "OverallQual": [4, 6, 8],
+        }
+    )
+    changed_target_and_ids = frame.assign(
+        Id=[101, 102, 103],
+        SalePrice=[900000, 800000, 700000],
+    )
+
+    original_features = prepare_features(frame)
+    changed_features = prepare_features(changed_target_and_ids)
+
+    pd.testing.assert_frame_equal(original_features, changed_features)
+    assert "SalePrice" not in original_features
+    assert "Id" not in original_features

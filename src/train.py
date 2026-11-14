@@ -110,9 +110,9 @@ def train() -> dict[str, Any]:
     tuning_rows: list[dict[str, Any]] = []
     candidate_results: dict[str, dict[str, Any]] = {}
 
-    # Every model family is evaluated with the same shuffled five-fold split.
-    # Families with search spaces receive the same randomized-search budget;
-    # families without tunable parameters are evaluated directly on those folds.
+    # Tune each family with the same shuffled five-fold protocol, then
+    # compare the selected configurations on identical repeated 5x2 folds.
+    # All preprocessing remains inside each cloned pipeline and fold.
     for name, estimator in candidate_models().items():
         LOGGER.info("Tuning and cross-validating %s", name)
         pipeline = make_pipeline(estimator, X_train)
@@ -178,12 +178,26 @@ def train() -> dict[str, Any]:
             "estimator": selected_estimator,
             "best_params": best_params,
         }
+        tuning_cv_mean = cv_mean
+        tuning_cv_std = cv_std
+        comparison_scores = cross_val_score(
+            selected_estimator,
+            X_train,
+            y_train,
+            cv=model_cv,
+            scoring="neg_root_mean_squared_error",
+            n_jobs=1,
+        )
+        cv_mean = float(-comparison_scores.mean())
+        cv_std = float(comparison_scores.std())
         rows.append(
             {
                 "model": name,
                 "cv_log_rmse_mean": cv_mean,
                 "cv_log_rmse_std": cv_std,
-                "cv_folds": 5,
+                "cv_folds": 10,
+                "tuning_cv_log_rmse_mean": tuning_cv_mean,
+                "tuning_cv_log_rmse_std": tuning_cv_std,
                 "cv_seconds": round(time.time() - started, 2),
             }
         )
@@ -201,7 +215,7 @@ def train() -> dict[str, Any]:
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.barh(results["model"], results["cv_log_rmse_mean"])
     ax.set(
-        xlabel="Tuned 5-fold CV RMSE (log-price)",
+        xlabel="Repeated 5x2 CV RMSE (log-price)",
         title="Tuned Candidate Model Comparison",
     )
     ax.invert_yaxis()
@@ -215,19 +229,10 @@ def train() -> dict[str, Any]:
     selected = candidate_results[best_name]["estimator"]
     best_params = candidate_results[best_name]["best_params"]
 
-    # Re-evaluate the chosen configuration on repeated folds that differ from
-    # the single KFold used by RandomizedSearchCV. The final holdout remains
-    # excluded from every selection and tuning operation.
-    tuned_cv_scores = cross_val_score(
-        selected,
-        X_train,
-        y_train,
-        cv=model_cv,
-        scoring="neg_root_mean_squared_error",
-        n_jobs=1,
-    )
-    tuned_cv_log_rmse_mean = float(-tuned_cv_scores.mean())
-    tuned_cv_log_rmse_std = float(tuned_cv_scores.std())
+    # The selected model's repeated-CV metrics were calculated for every
+    # candidate above, using the same folds and training-only data.
+    tuned_cv_log_rmse_mean = float(best_cv_row["cv_log_rmse_mean"])
+    tuned_cv_log_rmse_std = float(best_cv_row["cv_log_rmse_std"])
 
     train_log_predictions = selected.predict(X_train)
     validation_log_predictions = selected.predict(X_val)
@@ -292,11 +297,12 @@ def train() -> dict[str, Any]:
                 "tuning_comparison.csv",
             ],
             "cv_metric_note": (
-                "All candidate families use the same shuffled five-fold CV; "
-                "supported families receive the same eight-iteration randomized "
-                "search budget. The selected configuration is additionally "
-                "evaluated on repeated folds within the training partition. "
-                "The final holdout is excluded from all selection and tuning."
+                "Each supported family receives the same eight-iteration "
+                "randomized search budget using shuffled five-fold CV. The "
+                "selected configuration for every family is then compared on "
+                "the same repeated five-fold CV (five folds repeated twice), "
+                "using training-partition rows only. The untouched final holdout "
+                "is excluded from all fitting, tuning, and model selection."
             ),
         }
     )
