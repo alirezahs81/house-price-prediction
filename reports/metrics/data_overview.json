@@ -1,0 +1,29 @@
+{
+  "train_rows": 1460,
+  "columns_including_target": 81,
+  "numeric_columns": 38,
+  "categorical_columns": 43,
+  "duplicate_rows": 0,
+  "missing_cells": 7829,
+  "saleprice_mean": 180921.19589041095,
+  "saleprice_median": 163000.0,
+  "saleprice_min": 34900.0,
+  "saleprice_max": 755000.0,
+  "top_missing_columns": {
+    "PoolQC": 1453,
+    "MiscFeature": 1406,
+    "Alley": 1369,
+    "Fence": 1179,
+    "MasVnrType": 872,
+    "FireplaceQu": 690,
+    "LotFrontage": 259,
+    "GarageQual": 81,
+    "GarageFinish": 81,
+    "GarageType": 81,
+    "GarageYrBlt": 81,
+    "GarageCond": 81,
+    "BsmtFinType2": 38,
+    "BsmtExposure": 38,
+    "BsmtCond": 37
+  }
+}

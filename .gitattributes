@@ -1,0 +1,36 @@
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Python files
+*.py text diff=python
+
+# Documentation
+*.md text
+*.txt text
+*.rst text
+
+# Configuration
+*.toml text
+*.yaml text
+*.yml text
+*.ini text
+*.cfg text
+
+# Data files
+*.csv text
+*.json text
+
+# Notebooks
+*.ipynb text
+
+# Images - binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg text
+
+# Model files - binary
+*.joblib binary
+*.pkl binary
+*.model binary
