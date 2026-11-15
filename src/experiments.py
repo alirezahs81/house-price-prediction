@@ -20,11 +20,8 @@ from sklearn.model_selection import train_test_split
 from src.config import RANDOM_STATE, TARGET, TRAIN_FILE
 from src.data_validation import validate_training_data
 from src.evaluate import regression_metrics
-from src.preprocessing import (
-    prepare_features,
-    transform_absence_categories,
-)
 from src.modeling import make_pipeline
+from src.preprocessing import prepare_features, transform_absence_categories
 
 LOGGER = logging.getLogger(__name__)
 OUTPUT_DIR = Path("reports/experiments")
