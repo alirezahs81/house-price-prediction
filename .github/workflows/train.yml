@@ -8,6 +8,7 @@ on:
       - 'data/raw/**'
       - 'requirements.txt'
       - 'pyproject.toml'
+      - '.github/workflows/train.yml'
   pull_request:
     branches: [main]
     paths:
@@ -15,6 +16,7 @@ on:
       - 'data/raw/**'
       - 'requirements.txt'
       - 'pyproject.toml'
+      - '.github/workflows/train.yml'
   workflow_dispatch:
 
 jobs:
@@ -25,7 +27,6 @@ jobs:
     permissions:
       contents: read
       actions: read
-      issues: write
 
     steps:
       - name: Checkout repository
@@ -78,33 +79,41 @@ jobs:
           path: reports/
           retention-days: 7
 
-      - name: Comment PR with results
+      - name: Add training results to job summary
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const fs = require('fs');
-            const metricsPath = 'reports/metrics/validation_metrics.json';
-            if (fs.existsSync(metricsPath)) {
-              const metrics = JSON.parse(fs.readFileSync(metricsPath, 'utf8'));
-              const body = `## Model Training Results
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
-              **Selected Model:** ${metrics.selected_model}
+          metrics_path = Path("reports/metrics/validation_metrics.json")
+          if not metrics_path.is_file():
+              raise SystemExit(f"Missing training metrics: {metrics_path}")
 
-              **Validation Metrics:**
-              - MAE: $${metrics.MAE.toLocaleString(undefined, {maximumFractionDigits: 2})}
-              - RMSE: $${metrics.RMSE.toLocaleString(undefined, {maximumFractionDigits: 2})}
-              - R²: ${metrics.R2.toFixed(4)}
-              - RMSLE: ${metrics.RMSLE.toFixed(4)}
+          metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+          best_params = json.dumps(
+              metrics.get("best_params", {}),
+              indent=2,
+              ensure_ascii=False,
+          )
+          summary = f"""## Model Training Results
 
-              **Best Parameters:** ${JSON.stringify(metrics.best_params, null, 2)}
+          **Selected Model:** {metrics["selected_model"]}
 
-              *Generated from workflow run ${process.env.GITHUB_RUN_NUMBER}*`;
+          **Validation Metrics:**
+          - MAE: ${metrics["MAE"]:,.2f}
+          - RMSE: ${metrics["RMSE"]:,.2f}
+          - R²: {metrics["R2"]:.4f}
+          - RMSLE: {metrics["RMSLE"]:.4f}
 
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
-            }
+          **Best Parameters:**
+          ```json
+          {best_params}
+          ```
+
+          Workflow run: {os.environ["GITHUB_RUN_NUMBER"]}
+          """
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as stream:
+              stream.write(summary + "\n")
+          PY
