@@ -13,6 +13,7 @@ from sklearn.dummy import DummyRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import (
     KFold,
+    ParameterGrid,
     RandomizedSearchCV,
     RepeatedKFold,
     cross_val_score,
@@ -61,8 +62,8 @@ def _search_space(model_name: str) -> dict[str, list[Any]]:
             "model__n_estimators": [150, 250, 350, 500],
             "model__learning_rate": [0.02, 0.03, 0.05, 0.07],
             "model__max_depth": [1, 2, 3],
-            "model__min_samples_leaf": [2, 4, 6, 8],
-            "model__subsample": [0.7, 0.85, 1.0],
+            "model__min_samples_leaf": [2, 4, 6, 10],
+            "model__subsample": [0.65, 0.8, 0.95],
             "model__loss": ["huber", "squared_error", "absolute_error"],
             "model__alpha": [0.85, 0.9, 0.95],
         },
@@ -123,7 +124,7 @@ def train() -> dict[str, Any]:
             search = RandomizedSearchCV(
                 pipeline,
                 params,
-                n_iter=8,
+                n_iter=min(8, len(list(ParameterGrid(params)))),
                 scoring="neg_root_mean_squared_error",
                 cv=tuning_cv,
                 random_state=RANDOM_STATE,
