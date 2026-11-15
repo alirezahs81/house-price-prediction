@@ -2,7 +2,6 @@
 
 __version__ = "1.0.0"
 __author__ = "House Price Prediction Team"
-__email__ = "your-email@example.com"
 __description__ = "Reproducible Ames Housing regression project"
 __license__ = "MIT"
 
