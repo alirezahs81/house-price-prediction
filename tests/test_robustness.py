@@ -24,9 +24,7 @@ def test_summarize_results_reports_mean_and_sample_std() -> None:
             "RMSLE": [0.1, 0.2, 0.3],
         }
     )
-
     summary = summarize_results(results).set_index("metric")
-
     assert summary.loc["MAE", "mean"] == pytest.approx(20.0)
     assert summary.loc["MAE", "std"] == pytest.approx(10.0)
     assert summary.loc["R2", "median"] == pytest.approx(0.8)
@@ -34,21 +32,13 @@ def test_summarize_results_reports_mean_and_sample_std() -> None:
 
 
 def test_summarize_results_rejects_missing_metrics() -> None:
-    results = pd.DataFrame({"MAE": [1.0, 2.0]})
-
     with pytest.raises(ValueError, match="Missing required"):
-        summarize_results(results)
+        summarize_results(pd.DataFrame({"MAE": [1.0, 2.0]}))
 
 
 def test_summarize_results_requires_two_rows() -> None:
     results = pd.DataFrame(
-        {
-            "MAE": [1.0],
-            "RMSE": [1.0],
-            "R2": [0.5],
-            "RMSLE": [0.1],
-        }
+        {"MAE": [1.0], "RMSE": [1.0], "R2": [0.5], "RMSLE": [0.1]}
     )
-
     with pytest.raises(ValueError, match="At least two"):
         summarize_results(results)

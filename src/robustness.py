@@ -44,7 +44,7 @@ MODEL_PARAMS: dict[str, Any] = {
 
 
 def validate_seed_count(seed_count: int) -> None:
-    """Require at least two independent splits for a variability estimate."""
+    """Require at least two splits for a variability estimate."""
     if seed_count < 2:
         raise ValueError("seed_count must be at least 2.")
 
@@ -159,17 +159,20 @@ def run_robustness(
     )
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    axes[0].boxplot(
-        [per_seed["RMSE"], per_seed["R2"]],
-        labels=["RMSE", "R2"],
+    axes[0].plot(per_seed["seed"], per_seed["RMSE"], marker="o")
+    axes[0].set(
+        xlabel="Random seed",
+        ylabel="RMSE (price units)",
+        title="Holdout RMSE by seed",
     )
-    axes[0].set_title("Metric variability across random splits")
-    axes[0].grid(axis="y", alpha=0.2)
+    axes[0].grid(alpha=0.2)
 
-    axes[1].plot(per_seed["seed"], per_seed["RMSE"], marker="o", label="RMSE")
-    axes[1].set_xlabel("Random seed")
-    axes[1].set_ylabel("RMSE (price units)")
-    axes[1].set_title("Holdout RMSE by seed")
+    axes[1].plot(per_seed["seed"], per_seed["R2"], marker="o")
+    axes[1].set(
+        xlabel="Random seed",
+        ylabel="R2",
+        title="Holdout R2 by seed",
+    )
     axes[1].grid(alpha=0.2)
     fig.tight_layout()
     fig.savefig(output_dir / "robustness_metrics.png", dpi=160)

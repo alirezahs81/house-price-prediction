@@ -2,12 +2,14 @@ name: model-robustness
 
 on:
   pull_request:
-    branches: [main]
+    branches: [fix/lint-mypy, main]
     paths:
       - "src/robustness.py"
       - "tests/test_robustness.py"
       - "data/raw/train.csv"
       - "requirements.txt"
+      - "pyproject.toml"
+      - ".pre-commit-config.yaml"
       - ".github/workflows/robustness.yml"
   workflow_dispatch:
 
@@ -15,6 +17,33 @@ permissions:
   contents: read
 
 jobs:
+  quality:
+    name: Lint and unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run pre-commit checks
+        run: pre-commit run --all-files
+
+      - name: Run unit tests
+        run: python -m pytest -v
+
   robustness:
     name: Evaluate model stability across 30 seeds
     runs-on: ubuntu-24.04
