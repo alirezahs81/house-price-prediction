@@ -1,0 +1,78 @@
+name: model-robustness-error-analysis
+
+on:
+  pull_request:
+    branches: [experiment/robustness-30-seeds, fix/lint-mypy, main]
+    paths:
+      - "src/robustness.py"
+      - "tests/test_robustness.py"
+      - "data/raw/train.csv"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - ".pre-commit-config.yaml"
+      - ".github/workflows/robustness-error-analysis.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint and unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run pre-commit checks
+        run: pre-commit run --all-files
+
+      - name: Run unit tests
+        run: python -m pytest -v
+
+  robustness:
+    name: Evaluate 30 seeds and retain row-level errors
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Run robustness error analysis
+        run: python -m src.robustness --seeds 30 --start-seed 42
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
+      - name: Upload robustness reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: model-robustness-error-analysis-v2
+          path: reports/robustness/
+          if-no-files-found: error
+          retention-days: 14
