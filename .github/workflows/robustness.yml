@@ -69,6 +69,11 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
 
+      - name: Diagnose weak holdout seeds
+        run: python -m src.robustness --diagnostic-seeds 47 56 60 62
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+
       - name: Upload robustness reports
         uses: actions/upload-artifact@v7
         with:
