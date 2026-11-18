@@ -2,7 +2,7 @@ name: model-robustness-error-analysis
 
 on:
   pull_request:
-    branches: [fix/lint-mypy, main]
+    branches: [experiment/robustness-30-seeds, fix/lint-mypy, main]
     paths:
       - "src/robustness.py"
       - "tests/test_robustness.py"
