@@ -48,11 +48,23 @@ The candidate-specific error file contains only seeds where the corresponding ca
 
 These are small, split-dependent samples and should not be interpreted as independent test-set estimates.
 
+## Source-row context
+
+A read-only inspection of the repository's 1,460-row training CSV found:
+
+- Both candidates are in the Edwards neighborhood, have OverallQual 10, were built in 2007–2008, and are marked SaleType `New` / SaleCondition `Partial`.
+- ID 524: 4,676 sq ft above-ground living area, 40,094 sq ft lot, 3,138 sq ft basement, sale price $184,750 (about $39.51 per above-ground sq ft).
+- ID 1299: 5,642 sq ft above-ground living area, 63,887 sq ft lot, 6,110 sq ft basement, 480 sq ft pool, sale price $160,000 (about $28.36 per above-ground sq ft).
+- These are the two largest above-ground living-area records in the 122-row `New` / `Partial` subset. The next-largest record in that subset is 3,140 sq ft and sold for $485,000.
+- The other homes in the dataset above 3,500 sq ft are in different neighborhoods and sold for substantially more, so they are not direct comparables.
+
+This confirms that the two rows are unusual relative to the rest of this training file, but it does **not** prove that their sale prices are wrong. Their transaction/condition context and lack of close comparables mean the original source records would need verification before any correction could be justified.
+
 ## Conclusion and recommendation
 
 This experiment does **not** support excluding IDs 524 and 1299 from model training. On average, the exclusion scenario performed worse on all four aggregate metrics, and candidate-row validation errors were not improved in the observed paired appearances.
 
-**Recommendation:** retain both records in the dataset. Do not delete or alter source data based on this experiment. If these rows need further investigation, inspect their provenance and comparable property records, then evaluate any justified treatment on a separately held-out test set or a properly designed cross-validation protocol.
+**Recommendation:** retain both records in the dataset. Do not delete or alter source data based on this experiment. If these rows need further investigation, verify their provenance and transaction details against the original dataset/source documentation, then evaluate any justified treatment on a separately held-out test set or a properly designed cross-validation protocol.
 
 ## Limitations
 
@@ -60,3 +72,4 @@ This experiment does **not** support excluding IDs 524 and 1299 from model train
 - The results measure sensitivity on this dataset and under this fixed model configuration only.
 - No claim is made that either record is erroneous or fraudulent.
 - No model settings were tuned, and no dataset records were modified.
+- The source-row context above is descriptive only; it is not an independent appraisal or transaction verification.
