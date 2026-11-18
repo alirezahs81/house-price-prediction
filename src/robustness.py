@@ -181,13 +181,98 @@ def run_robustness(
     return per_seed, summary
 
 
+
+def run_seed_diagnostics(
+    seeds: list[int],
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Save row-level holdout errors for selected seeds without tuning the model."""
+    if not seeds:
+        raise ValueError("At least one diagnostic seed is required.")
+    if len(set(seeds)) != len(seeds):
+        raise ValueError("Diagnostic seeds must be unique.")
+
+    frame = pd.read_csv(TRAIN_FILE)
+    validate_training_data(frame)
+    features = transform_absence_categories(prepare_features(frame))
+    if TARGET in features.columns or "Id" in features.columns:
+        raise ValueError("Target or identifier leakage detected in model features.")
+
+    target_log = np.log1p(frame[TARGET].astype(float))
+    diagnostic_frames: list[pd.DataFrame] = []
+    feature_columns = [
+        "OverallQual",
+        "GrLivArea",
+        "TotalSF",
+        "TotalBathrooms",
+        "GarageCars",
+        "HouseAgeAtSale",
+    ]
+    available_features = [column for column in feature_columns if column in frame]
+
+    for seed in seeds:
+        X_train, X_valid, y_train, y_valid_log = train_test_split(
+            features,
+            target_log,
+            test_size=0.2,
+            random_state=seed,
+        )
+        pipeline = make_pipeline(GradientBoostingRegressor(**MODEL_PARAMS), X_train)
+        pipeline.fit(X_train, y_train)
+
+        actual = np.expm1(y_valid_log).to_numpy(dtype=float)
+        predicted = np.maximum(np.expm1(pipeline.predict(X_valid)), 1.0)
+        rows = frame.loc[X_valid.index, ["Id", TARGET] + available_features].copy()
+        rows = rows.rename(columns={"Id": "id", TARGET: "actual_price"})
+        rows.insert(0, "seed", seed)
+        rows["predicted_price"] = predicted
+        rows["absolute_error"] = np.abs(actual - predicted)
+        rows["percentage_error"] = (
+            rows["absolute_error"] / rows["actual_price"] * 100.0
+        )
+        rows["price_band"] = pd.cut(
+            rows["actual_price"],
+            bins=[0, 100000, 150000, 200000, 250000, np.inf],
+            labels=["<=100k", "100k-150k", "150k-200k", "200k-250k", ">250k"],
+            include_lowest=True,
+        ).astype("object")
+        diagnostic_frames.append(rows.reset_index(drop=True))
+        LOGGER.info("Saved row-level diagnostics for seed %d.", seed)
+
+    predictions = pd.concat(diagnostic_frames, ignore_index=True)
+    grouped = predictions.groupby(
+        ["seed", "price_band"], observed=True, sort=True
+    )
+    summary = grouped.agg(
+        rows=("absolute_error", "size"),
+        mae=("absolute_error", "mean"),
+        mean_absolute_percentage_error=("percentage_error", "mean"),
+        rmse=("absolute_error", lambda values: float(np.sqrt(np.mean(values**2)))),
+    ).reset_index()
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    predictions.sort_values(
+        ["seed", "absolute_error"], ascending=[True, False]
+    ).to_csv(output_dir / "robustness_row_level_diagnostics.csv", index=False)
+    summary.to_csv(output_dir / "robustness_error_by_seed_and_price_band.csv", index=False)
+    return predictions, summary
+
+
 def main() -> None:
     """Parse CLI options and run the robustness experiment."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seeds", type=int, default=30)
     parser.add_argument("--start-seed", type=int, default=RANDOM_STATE)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--diagnostic-seeds", type=int, nargs="+")
     args = parser.parse_args()
+    if args.diagnostic_seeds is not None:
+        predictions, summary = run_seed_diagnostics(
+            args.diagnostic_seeds, output_dir=args.output_dir
+        )
+        print(f"Saved {len(predictions)} row-level diagnostic records.")
+        print(summary.to_string(index=False))
+        return
     per_seed, summary = run_robustness(
         seed_count=args.seeds,
         start_seed=args.start_seed,
