@@ -56,7 +56,9 @@ def test_run_robustness_executes_small_end_to_end_experiment(
             "Id": range(1, rows + 1),
             "GrLivArea": [900 + index * 25 for index in range(rows)],
             "OverallQual": [4 + index % 6 for index in range(rows)],
-            "GarageArea": [0 if index % 4 == 0 else 250 + index for index in range(rows)],
+            "GarageArea": [
+                0 if index % 4 == 0 else 250 + index for index in range(rows)
+            ],
             "SalePrice": [80000 + index * 7500 for index in range(rows)],
         }
     )
