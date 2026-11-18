@@ -4,8 +4,8 @@ on:
   pull_request:
     branches: [fix/lint-mypy, main]
     paths:
-      - "src/robustness.py"
-      - "tests/test_robustness.py"
+      - "src/**"
+      - "tests/**"
       - "data/raw/train.csv"
       - "requirements.txt"
       - "pyproject.toml"
