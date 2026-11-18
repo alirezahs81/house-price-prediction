@@ -191,6 +191,14 @@ To add a new candidate model:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed contribution guidelines.
 
+## Robustness evaluation (stacked PR)
+
+A separate experiment evaluates the fixed Gradient Boosting configuration across 30 repeated random 80/20 holdout splits (`python -m src.robustness --seeds 30 --start-seed 42`). For every split, preprocessing is fitted only on that split's training partition; the model parameters are fixed before the experiment and validation scores are descriptive, not used for tuning. The workflow uploads per-seed metrics, descriptive summaries (mean, sample standard deviation, median, 10th/90th percentiles, minimum, maximum), and RMSE/R² trend plots as the `model-robustness-30-seeds` artifact.
+
+These are repeated random holdouts on the same dataset, not independent external test sets. Observations can appear in validation partitions across different seeds, so the reported variability measures sensitivity to the random split and must not be interpreted as a deployment confidence interval. The experiment is complementary to the single untouched holdout used by the primary training workflow; it does not replace external validation.
+
+The robustness experiment's fixed GradientBoosting parameters are `n_estimators=500`, `learning_rate=0.05`, `max_depth=3`, `min_samples_leaf=2`, `subsample=0.8`, `loss='huber'`, and `alpha=0.95` (with the project random state). These match the selected configuration recorded in the latest successful training artifact for PR #1.
+
 ## Limitations and future work
 
 This is a small historical competition dataset; predictions should not be treated as professional appraisals. Validation scores are split-dependent and may not represent real-world generalization. Potential extensions include:
