@@ -156,9 +156,8 @@ def summarize_errors_by_seed_and_band(
         mean_residual=("residual", "mean"),
         MAE=("absolute_error", "mean"),
     ).reset_index()
-    rmse = grouped.apply(
-        lambda group: float(np.sqrt(np.mean(np.square(group["residual"])))),
-        include_groups=False,
+    rmse = grouped["residual"].apply(
+        lambda values: float(np.sqrt(np.mean(np.square(values.to_numpy(dtype=float)))))
     )
     summary["RMSE"] = [
         float(rmse.loc[(row.seed, row.price_band)]) for row in summary.itertuples()
