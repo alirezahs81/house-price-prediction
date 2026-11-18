@@ -1,4 +1,4 @@
-"""Assess model stability across repeated, independent holdout splits.
+"""Assess model stability across repeated random holdout splits.
 
 The experiment reuses the fixed, previously selected GradientBoosting settings.
 Each seed creates a fresh 80/20 split; preprocessing is fitted only on that
