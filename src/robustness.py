@@ -101,7 +101,11 @@ def build_prediction_diagnostics(
     edges = np.asarray(price_band_edges, dtype=float).reshape(-1)
     if not (len(ids) == len(y_true) == len(y_pred)):
         raise ValueError("IDs, actual values, and predictions must have equal lengths.")
-    if len(y_true) == 0 or not np.isfinite(y_true).all() or not np.isfinite(y_pred).all():
+    if (
+        len(y_true) == 0
+        or not np.isfinite(y_true).all()
+        or not np.isfinite(y_pred).all()
+    ):
         raise ValueError("Actual values and predictions must be non-empty and finite.")
     if (y_true < 0).any() or (y_pred < 0).any():
         raise ValueError("Actual values and predictions must be non-negative.")
@@ -170,7 +174,7 @@ def run_robustness(
     start_seed: int = RANDOM_STATE,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Fit the fixed model on repeated splits and save aggregate and row-level reports."""
+    """Fit the fixed model and save aggregate and row-level reports."""
     validate_seed_count(seed_count)
     frame = pd.read_csv(TRAIN_FILE)
     validate_training_data(frame)
