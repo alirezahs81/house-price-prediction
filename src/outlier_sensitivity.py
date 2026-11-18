@@ -58,7 +58,9 @@ def paired_metric_comparison(results: pd.DataFrame) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Missing required result columns: {sorted(missing)}")
     baseline = results[results["scenario"] == "baseline"].set_index("seed")
-    filtered = results[results["scenario"] == "exclude_candidates_from_training"].set_index("seed")
+    filtered = results[
+        results["scenario"] == "exclude_candidates_from_training"
+    ].set_index("seed")
     common = baseline.index.intersection(filtered.index)
     if len(common) == 0 or len(common) != len(baseline) or len(common) != len(filtered):
         raise ValueError("Each seed must have exactly one result for both scenarios.")
