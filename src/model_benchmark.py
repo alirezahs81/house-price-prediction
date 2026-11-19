@@ -13,6 +13,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import (
@@ -187,9 +188,7 @@ def run_benchmark(
     )
 
     rmse = summary[summary["metric"] == "RMSE"].sort_values("mean")
-    fig, ax = __import__("matplotlib.pyplot", fromlist=["subplots"]).subplots(
-        figsize=(9, 5)
-    )
+    fig, ax = plt.subplots(figsize=(9, 5))
     ax.bar(rmse["model"], rmse["mean"], yerr=rmse["std"], capsize=4)
     ax.set(
         xlabel="Model",
@@ -200,7 +199,7 @@ def run_benchmark(
     ax.grid(axis="y", alpha=0.2)
     fig.tight_layout()
     fig.savefig(output_dir / "model_benchmark_rmse.png", dpi=160)
-    __import__("matplotlib.pyplot", fromlist=["close"]).close(fig)
+    plt.close(fig)
 
     return per_seed, summary
 
