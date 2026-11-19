@@ -6,7 +6,44 @@ import pandas as pd
 import pytest
 
 import src.robustness as robustness
-from src.robustness import summarize_results, validate_seed_count
+from src.robustness import split_holdout, summarize_results, validate_seed_count
+
+
+
+
+def test_split_holdout_keeps_training_and_validation_rows_disjoint() -> None:
+    features = pd.DataFrame(
+        {"feature": range(100)},
+        index=pd.Index(range(100), name="row_id"),
+    )
+    target = pd.Series(range(100), index=features.index, name="SalePrice")
+
+    for seed in (42, 47, 56):
+        X_train, X_valid, y_train, y_valid = split_holdout(
+            features, target, seed=seed
+        )
+        assert X_train.index.intersection(X_valid.index).empty
+        assert set(X_train.index) | set(X_valid.index) == set(features.index)
+        assert y_train.index.equals(X_train.index)
+        assert y_valid.index.equals(X_valid.index)
+
+        repeated = split_holdout(features, target, seed=seed)
+        pd.testing.assert_index_equal(X_train.index, repeated[0].index)
+        pd.testing.assert_index_equal(X_valid.index, repeated[1].index)
+
+
+def test_split_holdout_rejects_misaligned_feature_and_target_indices() -> None:
+    features = pd.DataFrame({"feature": [1, 2, 3]}, index=[0, 1, 2])
+    target = pd.Series([10, 20, 30], index=[1, 2, 3])
+    with pytest.raises(ValueError, match="identical row indices"):
+        split_holdout(features, target, seed=42)
+
+
+def test_split_holdout_rejects_invalid_test_size() -> None:
+    features = pd.DataFrame({"feature": [1, 2, 3, 4]})
+    target = pd.Series([10, 20, 30, 40])
+    with pytest.raises(ValueError, match="between 0 and 1"):
+        split_holdout(features, target, seed=42, test_size=1.0)
 
 
 def test_validate_seed_count_requires_two_splits() -> None:
