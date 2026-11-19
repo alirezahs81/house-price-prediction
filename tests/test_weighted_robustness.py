@@ -1,5 +1,7 @@
 """Tests for paired price-weighted robustness comparisons."""
 
+# The integration test deliberately uses identical seeded holdouts for both models.
+
 from pathlib import Path
 
 import numpy as np
