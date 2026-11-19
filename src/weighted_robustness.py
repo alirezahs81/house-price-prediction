@@ -82,7 +82,9 @@ def _fit_and_score(
     predicted = np.maximum(np.expm1(pipeline.predict(X_valid)), 1.0)
     high_mask = actual >= high_value_threshold
     if not high_mask.any():
-        raise ValueError("No validation rows met the training-derived high-value threshold.")
+        raise ValueError(
+            "No validation rows met the training-derived high-value threshold."
+        )
 
     overall = regression_metrics(actual, predicted)
     high_value = regression_metrics(actual[high_mask], predicted[high_mask])
