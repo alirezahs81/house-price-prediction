@@ -181,7 +181,6 @@ def run_robustness(
     return per_seed, summary
 
 
-
 def run_seed_diagnostics(
     seeds: list[int],
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -254,7 +253,9 @@ def run_seed_diagnostics(
     predictions.sort_values(
         ["seed", "absolute_error"], ascending=[True, False]
     ).to_csv(output_dir / "robustness_row_level_diagnostics.csv", index=False)
-    summary.to_csv(output_dir / "robustness_error_by_seed_and_price_band.csv", index=False)
+    summary.to_csv(
+        output_dir / "robustness_error_by_seed_and_price_band.csv", index=False
+    )
     return predictions, summary
 
 
