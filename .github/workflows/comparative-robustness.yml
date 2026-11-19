@@ -1,0 +1,80 @@
+name: comparative-model-robustness
+
+on:
+  push:
+    branches: [experiment/robustness-30-seeds]
+    paths:
+      - "src/comparative_robustness.py"
+      - "src/robustness.py"
+      - "tests/test_comparative_robustness.py"
+      - "data/raw/train.csv"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - ".github/workflows/comparative-robustness.yml"
+  pull_request:
+    branches: [fix/lint-mypy, main]
+    paths:
+      - "src/comparative_robustness.py"
+      - "src/robustness.py"
+      - "tests/test_comparative_robustness.py"
+      - "data/raw/train.csv"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - ".github/workflows/comparative-robustness.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Lint and unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            pyproject.toml
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+      - name: Run pre-commit checks
+        run: pre-commit run --all-files
+      - name: Run unit tests
+        run: python -m pytest -v
+
+  comparative-experiment:
+    name: Compare three strategies across 30 paired seeds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run paired comparative experiment
+        run: python -m src.comparative_robustness --seeds 30 --start-seed 42
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+      - name: Upload comparative reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: comparative-model-robustness-30-seeds
+          path: reports/comparative_robustness/
+          if-no-files-found: error
+          retention-days: 14
