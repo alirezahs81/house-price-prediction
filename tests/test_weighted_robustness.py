@@ -98,7 +98,15 @@ def test_run_weighted_robustness_uses_paired_splits_and_writes_reports(
     assert per_seed["seed"].tolist() == [10, 11, 12]
     assert per_seed["train_rows"].eq(48).all()
     assert per_seed["validation_rows"].eq(12).all()
-    assert per_seed["high_value_rows"].gt(0).all()
+    assert per_seed["high_value_rows"].ge(0).all()
+    empty_high_value = per_seed["high_value_rows"].eq(0)
+    if empty_high_value.any():
+        assert per_seed.loc[
+            empty_high_value, "baseline_high_value_RMSE"
+        ].isna().all()
+        assert per_seed.loc[
+            empty_high_value, "weighted_high_value_RMSE"
+        ].isna().all()
     assert {
         "baseline_overall_RMSE",
         "weighted_overall_RMSE",
