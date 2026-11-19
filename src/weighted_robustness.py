@@ -49,10 +49,24 @@ def make_price_weights(
     if lower <= 0 or upper < lower:
         raise ValueError("Weight bounds must satisfy 0 < lower <= upper.")
 
+    if not lower <= 1.0 <= upper:
+        raise ValueError("Weight bounds must include 1 so the mean can equal 1.")
+
     median_price = float(np.median(prices))
-    weights = np.sqrt(prices / median_price)
-    weights = np.clip(weights, lower, upper)
-    weights = weights / weights.mean()
+    raw_weights = np.sqrt(prices / median_price)
+
+    # Find a scale whose clipped weights have mean exactly 1. Normalizing
+    # after clipping would push some values outside the requested bounds.
+    low = lower / float(raw_weights.max())
+    high = upper / float(raw_weights.min())
+    for _ in range(80):
+        scale = (low + high) / 2.0
+        if np.clip(raw_weights * scale, lower, upper).mean() < 1.0:
+            low = scale
+        else:
+            high = scale
+
+    weights = np.clip(raw_weights * ((low + high) / 2.0), lower, upper)
     return weights.astype(float)
 
 
@@ -81,13 +95,15 @@ def _fit_and_score(
     actual = y_valid_actual.to_numpy(dtype=float)
     predicted = np.maximum(np.expm1(pipeline.predict(X_valid)), 1.0)
     high_mask = actual >= high_value_threshold
-    if not high_mask.any():
-        raise ValueError(
-            "No validation rows met the training-derived high-value threshold."
-        )
 
     overall = regression_metrics(actual, predicted)
-    high_value = regression_metrics(actual[high_mask], predicted[high_mask])
+    # A small validation fold can legitimately contain no observations above
+    # a threshold derived from its training fold. Keep the paired run and mark
+    # that segment unavailable rather than failing the entire experiment.
+    if high_mask.any():
+        high_value = regression_metrics(actual[high_mask], predicted[high_mask])
+    else:
+        high_value = {key: float("nan") for key in overall}
     return {
         **{f"overall_{key}": float(value) for key, value in overall.items()},
         **{f"high_value_{key}": float(value) for key, value in high_value.items()},
