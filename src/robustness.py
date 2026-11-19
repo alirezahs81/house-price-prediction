@@ -49,6 +49,31 @@ def validate_seed_count(seed_count: int) -> None:
         raise ValueError("seed_count must be at least 2.")
 
 
+def split_holdout(
+    features: pd.DataFrame,
+    target: pd.Series,
+    seed: int,
+    test_size: float = 0.2,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """Create a reproducible holdout and enforce row-level partition integrity."""
+    if not features.index.equals(target.index):
+        raise ValueError("features and target must have identical row indices.")
+    if not 0.0 < test_size < 1.0:
+        raise ValueError("test_size must be between 0 and 1.")
+
+    X_train, X_valid, y_train, y_valid = train_test_split(
+        features,
+        target,
+        test_size=test_size,
+        random_state=seed,
+    )
+    if not X_train.index.intersection(X_valid.index).empty:
+        raise RuntimeError("Training and validation rows must be disjoint.")
+    if len(X_train) + len(X_valid) != len(features):
+        raise RuntimeError("Holdout split did not preserve every input row.")
+    return X_train, X_valid, y_train, y_valid
+
+
 def summarize_results(results: pd.DataFrame) -> pd.DataFrame:
     """Summarize holdout metrics across seeds using descriptive statistics."""
     missing = set(METRICS).difference(results.columns)
@@ -93,11 +118,8 @@ def run_robustness(
     rows: list[dict[str, float | int]] = []
 
     for seed in range(start_seed, start_seed + seed_count):
-        X_train, X_valid, y_train, y_valid_log = train_test_split(
-            features,
-            target_log,
-            test_size=0.2,
-            random_state=seed,
+        X_train, X_valid, y_train, y_valid_log = split_holdout(
+            features, target_log, seed=seed, test_size=0.2
         )
         estimator = GradientBoostingRegressor(**MODEL_PARAMS)
         pipeline = make_pipeline(estimator, X_train)
@@ -210,11 +232,8 @@ def run_seed_diagnostics(
     available_features = [column for column in feature_columns if column in frame]
 
     for seed in seeds:
-        X_train, X_valid, y_train, y_valid_log = train_test_split(
-            features,
-            target_log,
-            test_size=0.2,
-            random_state=seed,
+        X_train, X_valid, y_train, y_valid_log = split_holdout(
+            features, target_log, seed=seed, test_size=0.2
         )
         pipeline = make_pipeline(GradientBoostingRegressor(**MODEL_PARAMS), X_train)
         pipeline.fit(X_train, y_train)
