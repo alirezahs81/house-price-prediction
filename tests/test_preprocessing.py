@@ -63,3 +63,32 @@ def test_target_and_identifier_do_not_change_model_features():
     pd.testing.assert_frame_equal(original_features, changed_features)
     assert "SalePrice" not in original_features
     assert "Id" not in original_features
+
+def test_pipeline_fits_preprocessing_statistics_on_training_rows_only():
+    from sklearn.linear_model import Ridge
+
+    from src.modeling import make_pipeline
+
+    X_train = pd.DataFrame(
+        {"numeric": [1.0, 2.0, 3.0], "category": ["a", "b", "a"]}
+    )
+    X_validation = pd.DataFrame(
+        {"numeric": [1000000.0], "category": ["unseen-validation-category"]}
+    )
+    pipeline = make_pipeline(Ridge(), X_train)
+    pipeline.fit(X_train, [10.0, 20.0, 30.0])
+
+    preprocessor = pipeline.named_steps["preprocessor"]
+    numeric_imputer = preprocessor.named_transformers_["numeric"].named_steps[
+        "imputer"
+    ]
+    categorical_encoder = preprocessor.named_transformers_["categorical"].named_steps[
+        "onehot"
+    ]
+
+    assert numeric_imputer.statistics_[0] == 2.0
+    assert list(categorical_encoder.categories_[0]) == ["a", "b"]
+    transformed_validation = preprocessor.transform(X_validation)
+    assert transformed_validation.shape[0] == 1
+    assert np.isfinite(transformed_validation).all()
+

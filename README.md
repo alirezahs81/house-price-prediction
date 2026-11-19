@@ -220,3 +220,10 @@ The MIT license applies to original project source code only. The dataset and it
 - Ames Housing dataset by Dean De Cock
 - Kaggle House Prices competition
 - scikit-learn, pandas, numpy, matplotlib communities
+
+### Leakage and split-integrity safeguards
+
+The repeated-holdout experiment validates that feature and target indices are aligned before splitting, that training and validation partitions are disjoint, and that every input row is assigned to exactly one partition. The same deterministic split helper is used for the aggregate experiment and row-level diagnostics. Preprocessing remains inside the model pipeline and is fitted only on each training partition; validation rows are transformed but never used to estimate imputation or encoding statistics.
+
+Automated tests cover split reproducibility, partition disjointness, complete row coverage, index-alignment failures, invalid holdout fractions, and training-only preprocessing statistics. These checks reduce the risk of accidental leakage in this evaluation path; they do not prove that every possible source of dataset or temporal leakage is absent.
+
