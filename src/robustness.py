@@ -57,7 +57,6 @@ def fit_baseline_holdout(
     return np.maximum(np.expm1(pipeline.predict(X_valid)), 1.0)
 
 
-
 def validate_seed_count(seed_count: int) -> None:
     """Require at least two splits for a variability estimate."""
     if seed_count < 2:
