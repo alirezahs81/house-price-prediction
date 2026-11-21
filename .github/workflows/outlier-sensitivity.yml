@@ -1,4 +1,5 @@
 name: outlier-sensitivity
+# Keep the paired sensitivity run and quality checks on the same PR revision.
 
 on:
   pull_request:
