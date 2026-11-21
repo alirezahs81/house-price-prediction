@@ -101,7 +101,7 @@ def run_comparative_experiment(
         }
 
         for scenario, predicted in scenario_predictions.items():
-            metrics = regression_metrics(actual, predicted)
+            regression_scores = regression_metrics(actual, predicted)
             metric_rows.append(
                 {
                     "seed": seed,
@@ -116,7 +116,7 @@ def run_comparative_experiment(
                         else ""
                     ),
                     **{
-                        name: float(metrics[name])
+                        name: float(regression_scores[name])
                         for name in ("MAE", "RMSE", "R2", "RMSLE")
                     },
                 }
