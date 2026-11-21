@@ -224,7 +224,7 @@ def run_outlier_sensitivity(
         "RMSLE": "RMSLE (lower is better)",
     }
     labels = ("Baseline", "Train-only exclusion")
-    for ax, metric in zip(axes.flat, METRICS):
+    for ax, metric in zip(axes.flat, METRICS, strict=True):
         values = [
             float(per_seed[f"baseline_{metric}"].mean()),
             float(per_seed[f"sensitivity_{metric}"].mean()),
@@ -242,8 +242,11 @@ def run_outlier_sensitivity(
         lower = min(0.0, min(values) - padding)
         upper = max(values) + padding
         ax.set_ylim(lower, upper)
-        for bar, value in zip(bars, values):
-            label = f"${value:,.0f}" if metric in ("MAE", "RMSE") else f"{value:.4f}"
+        for bar, value in zip(bars, values, strict=True):
+            if metric in ("MAE", "RMSE"):
+                label = f"${value:,.0f}"
+            else:
+                label = f"{value:.4f}"
             ax.annotate(
                 label,
                 (bar.get_x() + bar.get_width() / 2, bar.get_height()),
