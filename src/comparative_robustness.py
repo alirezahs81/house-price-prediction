@@ -148,12 +148,15 @@ def run_comparative_experiment(
         .agg(["mean", "std", "median", "min", "max"])
         .reset_index()
     )
-    summary.columns = [
-        "_".join(str(part) for part in column if part).rstrip("_")
-        if isinstance(column, tuple)
-        else column
-        for column in summary.columns
-    ]
+    summary = summary.set_axis(
+        [
+            "_".join(str(part) for part in column if part).rstrip("_")
+            if isinstance(column, tuple)
+            else column
+            for column in summary.columns
+        ],
+        axis=1,
+    )
     price_band_summary = (
         predictions.groupby(["scenario", "price_band"], observed=True, sort=True)
         .agg(
