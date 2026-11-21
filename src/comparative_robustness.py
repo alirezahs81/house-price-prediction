@@ -20,7 +20,12 @@ from src.data_validation import validate_training_data
 from src.evaluate import regression_metrics
 from src.modeling import make_pipeline
 from src.preprocessing import prepare_features, transform_absence_categories
-from src.robustness import MODEL_PARAMS, split_holdout, validate_seed_count
+from src.robustness import (
+    MODEL_PARAMS,
+    fit_baseline_holdout,
+    split_holdout,
+    validate_seed_count,
+)
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_DIR = Path("reports/comparative_robustness")
@@ -91,7 +96,9 @@ def run_comparative_experiment(
             )
 
         scenario_predictions = {
-            "baseline": _fit_predict(X_train, y_train, X_valid, "huber"),
+            "baseline": fit_baseline_holdout(
+                X_train, y_train, X_valid, model_params=MODEL_PARAMS
+            ),
             "influence_control": _fit_predict(
                 X_control, y_control, X_valid, "huber"
             ),
