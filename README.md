@@ -220,3 +220,9 @@ The MIT license applies to original project source code only. The dataset and it
 - Ames Housing dataset by Dean De Cock
 - Kaggle House Prices competition
 - scikit-learn, pandas, numpy, matplotlib communities
+
+### Influence-control case selection
+
+Training-row IDs 524 and 1299 were selected as exploratory influence-control cases after earlier error diagnostics repeatedly identified them among the largest errors. Both represent unusually large homes with sale prices that were low relative to the model's predictions: ID 1299 (5,642 sq ft living area; actual price $160,000) and ID 524 (4,676 sq ft; actual price $184,750). Earlier diagnostics showed predictions far above the observed prices and a disproportionate contribution to squared error. These rows are retained in the dataset; they are not treated as invalid records or removed from validation. In the paired influence-control scenario they are excluded only when they occur in the training partition, while every validation row remains scored.
+
+Because the cases were selected after examining earlier model-error diagnostics, this comparison is exploratory and may reflect selection bias. It is a sensitivity analysis of training influence, not an unbiased estimate of generalization improvement and not evidence that these observations should be deleted. Results should be interpreted alongside the baseline scenario and the project's untouched holdout.
