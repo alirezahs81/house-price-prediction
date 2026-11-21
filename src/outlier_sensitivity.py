@@ -17,13 +17,52 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import GradientBoostingRegressor
+from sklearn.model_selection import train_test_split
 
 from src.config import RANDOM_STATE, TARGET, TRAIN_FILE
 from src.data_validation import validate_training_data
 from src.evaluate import regression_metrics
 from src.modeling import make_pipeline
 from src.preprocessing import prepare_features, transform_absence_categories
-from src.robustness import MODEL_PARAMS, split_holdout
+
+# Keep the experiment self-contained: main does not include src.robustness.
+# These are the fixed parameters used by the existing robustness experiment.
+MODEL_PARAMS: dict[str, Any] = {
+    "n_estimators": 500,
+    "learning_rate": 0.05,
+    "max_depth": 3,
+    "min_samples_leaf": 2,
+    "subsample": 0.8,
+    "loss": "huber",
+    "alpha": 0.95,
+    "random_state": RANDOM_STATE,
+}
+
+
+def split_holdout(
+    features: pd.DataFrame,
+    target: pd.Series,
+    seed: int,
+    test_size: float = 0.2,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+    """Create a reproducible holdout and preserve row-level partition integrity."""
+    if not features.index.equals(target.index):
+        raise ValueError("features and target must have identical row indices.")
+    if not 0.0 < test_size < 1.0:
+        raise ValueError("test_size must be between 0 and 1.")
+
+    X_train, X_valid, y_train, y_valid = train_test_split(
+        features,
+        target,
+        test_size=test_size,
+        random_state=seed,
+    )
+    if not X_train.index.intersection(X_valid.index).empty:
+        raise RuntimeError("Training and validation rows must be disjoint.")
+    if len(X_train) + len(X_valid) != len(features):
+        raise RuntimeError("Holdout split did not preserve every input row.")
+    return X_train, X_valid, y_train, y_valid
+
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_DIR = Path("reports/outlier_sensitivity")
