@@ -260,7 +260,10 @@ def run_outlier_sensitivity(
     fig.text(
         0.5,
         0.015,
-        "Primary metrics use every validation row; flagged rows are excluded only from training.",
+        (
+            "Primary metrics use every validation row; "
+            "flagged rows are excluded only from training."
+        ),
         ha="center",
         fontsize=9,
     )
