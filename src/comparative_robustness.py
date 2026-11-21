@@ -143,20 +143,44 @@ def run_comparative_experiment(
 
     per_seed = pd.DataFrame(metric_rows)
     predictions = pd.concat(prediction_rows, ignore_index=True)
+    metric_names = ["MAE", "RMSE", "R2", "RMSLE"]
     summary = (
-        per_seed.groupby("scenario", sort=False)[["MAE", "RMSE", "R2", "RMSLE"]]
+        per_seed.groupby("scenario", sort=False)[metric_names]
         .agg(["mean", "std", "median", "min", "max"])
         .reset_index()
     )
-    summary = summary.set_axis(
-        [
-            "_".join(str(part) for part in column if part).rstrip("_")
-            if isinstance(column, tuple)
-            else column
-            for column in summary.columns
-        ],
-        axis=1,
+    summary.columns = [
+        "_".join(str(part) for part in column if part).rstrip("_")
+        if isinstance(column, tuple)
+        else column
+        for column in summary.columns
+    ]
+    baseline_metrics = per_seed[per_seed["scenario"] == "baseline"].set_index("seed")
+    paired_rows: list[dict[str, float | int | str]] = []
+    for scenario in SCENARIOS:
+        if scenario == "baseline":
+            continue
+        scenario_metrics = per_seed[per_seed["scenario"] == scenario].set_index("seed")
+        for metric in metric_names:
+            differences = scenario_metrics[metric] - baseline_metrics[metric]
+            for seed, difference in differences.items():
+                paired_rows.append(
+                    {
+                        "seed": int(seed),
+                        "scenario": scenario,
+                        "metric": metric,
+                        "difference_vs_baseline": float(difference),
+                    }
+                )
+    paired_differences = pd.DataFrame(paired_rows)
+    paired_summary = (
+        paired_differences.groupby(["scenario", "metric"], sort=False)[
+            "difference_vs_baseline"
+        ]
+        .agg(["mean", "std", "median", "min", "max"])
+        .reset_index()
     )
+
     price_band_summary = (
         predictions.groupby(["scenario", "price_band"], observed=True, sort=True)
         .agg(
@@ -170,6 +194,12 @@ def run_comparative_experiment(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     per_seed.to_csv(output_dir / "comparative_by_seed.csv", index=False)
+    paired_differences.to_csv(
+        output_dir / "comparative_paired_differences.csv", index=False
+    )
+    paired_summary.to_csv(
+        output_dir / "comparative_paired_summary.csv", index=False
+    )
     summary.to_csv(output_dir / "comparative_summary.csv", index=False)
     price_band_summary.to_csv(
         output_dir / "comparative_by_price_band.csv", index=False
@@ -206,6 +236,7 @@ def run_comparative_experiment(
         ),
         "influential_ids": list(INFLUENTIAL_IDS),
         "summary": summary.to_dict(orient="records"),
+        "paired_difference_summary": paired_summary.to_dict(orient="records"),
     }
     (output_dir / "comparative_summary.json").write_text(
         json.dumps(metadata, indent=2), encoding="utf-8"
