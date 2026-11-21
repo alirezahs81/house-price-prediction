@@ -1,6 +1,7 @@
 """Tests for paired comparative robustness experiments."""
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -78,3 +79,34 @@ def test_influence_control_never_removes_validation_rows(
 def test_comparison_requires_at_least_two_seeds(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="at least 2"):
         comparative.run_comparative_experiment(seed_count=1, output_dir=tmp_path)
+
+
+def test_comparison_baseline_uses_shared_fitting_helper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    frame = _sample_frame()
+    data_path = tmp_path / "train.csv"
+    frame.to_csv(data_path, index=False)
+    monkeypatch.setattr(comparative, "TRAIN_FILE", data_path)
+    monkeypatch.setattr(
+        comparative,
+        "MODEL_PARAMS",
+        {**comparative.MODEL_PARAMS, "n_estimators": 5},
+    )
+    calls: list[int] = []
+
+    def shared_fit(
+        X_train: pd.DataFrame,
+        y_train: pd.Series,
+        X_valid: pd.DataFrame,
+        model_params: dict[str, object] | None = None,
+    ) -> np.ndarray:
+        calls.append(len(X_valid))
+        return np.full(len(X_valid), 150000.0)
+
+    monkeypatch.setattr(comparative, "fit_baseline_holdout", shared_fit)
+    comparative.run_comparative_experiment(
+        seed_count=2, start_seed=20, output_dir=tmp_path / "reports"
+    )
+
+    assert calls == [8, 8]
