@@ -86,7 +86,9 @@ def run_comparative_experiment(
         y_control = y_train.loc[control_mask]
         removed_ids = sorted(set(training_ids) & set(INFLUENTIAL_IDS))
         if X_control.empty:
-            raise RuntimeError("Influence control unexpectedly removed all training rows.")
+            raise RuntimeError(
+                "Influence control unexpectedly removed all training rows."
+            )
 
         scenario_predictions = {
             "baseline": _fit_predict(X_train, y_train, X_valid, "huber"),
@@ -113,7 +115,10 @@ def run_comparative_experiment(
                         if scenario == "influence_control"
                         else ""
                     ),
-                    **{name: float(metrics[name]) for name in ("MAE", "RMSE", "R2", "RMSLE")},
+                    **{
+                        name: float(metrics[name])
+                        for name in ("MAE", "RMSE", "R2", "RMSLE")
+                    },
                 }
             )
             details = pd.DataFrame(
@@ -175,7 +180,10 @@ def run_comparative_experiment(
         "seeds": list(range(start_seed, start_seed + seed_count)),
         "split": "Identical deterministic 80/20 random holdout per seed",
         "scenarios": {
-            "baseline": "GradientBoostingRegressor with the existing fixed Huber loss settings",
+            "baseline": (
+                "GradientBoostingRegressor with the existing fixed Huber "
+                "loss settings"
+            ),
             "influence_control": (
                 "Same Huber model; IDs 524 and 1299 are excluded from training "
                 "only when present there. All validation rows remain included."
