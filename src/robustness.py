@@ -43,6 +43,21 @@ MODEL_PARAMS: dict[str, Any] = {
 }
 
 
+def fit_baseline_holdout(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_valid: pd.DataFrame,
+    model_params: dict[str, Any] | None = None,
+) -> np.ndarray:
+    """Fit the canonical Huber baseline and return predictions on price scale."""
+    params = MODEL_PARAMS if model_params is None else model_params
+    estimator = GradientBoostingRegressor(**params)
+    pipeline = make_pipeline(estimator, X_train)
+    pipeline.fit(X_train, y_train)
+    return np.maximum(np.expm1(pipeline.predict(X_valid)), 1.0)
+
+
+
 def validate_seed_count(seed_count: int) -> None:
     """Require at least two splits for a variability estimate."""
     if seed_count < 2:
@@ -121,11 +136,7 @@ def run_robustness(
         X_train, X_valid, y_train, y_valid_log = split_holdout(
             features, target_log, seed=seed, test_size=0.2
         )
-        estimator = GradientBoostingRegressor(**MODEL_PARAMS)
-        pipeline = make_pipeline(estimator, X_train)
-        pipeline.fit(X_train, y_train)
-
-        predictions = np.maximum(np.expm1(pipeline.predict(X_valid)), 1.0)
+        predictions = fit_baseline_holdout(X_train, y_train, X_valid)
         actual = np.expm1(y_valid_log).to_numpy(dtype=float)
         metrics = regression_metrics(actual, predictions)
         rows.append(
