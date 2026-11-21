@@ -101,6 +101,7 @@ def run_comparative_experiment(
         }
 
         for scenario, predicted in scenario_predictions.items():
+            # Avoid shadowing the metric-name list used in the summary below.
             regression_scores = regression_metrics(actual, predicted)
             metric_rows.append(
                 {
