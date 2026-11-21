@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import Ridge
 from src.modeling import make_pipeline
+from src.train import _search_space
 from src.preprocessing import prepare_features, transform_absence_categories
 
 def test_small_model_fit_and_prediction():
@@ -12,3 +13,15 @@ def test_small_model_fit_and_prediction():
     pred=np.expm1(model.predict(X))
     assert np.isfinite(pred).all() and (pred>0).all()
     assert len(pred)==len(df)
+
+
+def test_gradient_boosting_search_includes_robust_and_squared_losses():
+    search_space = _search_space("GradientBoosting")
+
+    assert set(search_space["model__loss"]) == {
+        "huber",
+        "squared_error",
+        "absolute_error",
+    }
+    assert search_space["model__n_estimators"]
+    assert search_space["model__alpha"]
