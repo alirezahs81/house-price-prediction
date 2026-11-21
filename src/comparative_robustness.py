@@ -143,9 +143,9 @@ def run_comparative_experiment(
 
     per_seed = pd.DataFrame(metric_rows)
     predictions = pd.concat(prediction_rows, ignore_index=True)
-    metrics = ["MAE", "RMSE", "R2", "RMSLE"]
+    metric_names = ["MAE", "RMSE", "R2", "RMSLE"]
     summary = (
-        per_seed.groupby("scenario", sort=False)[metrics]
+        per_seed.groupby("scenario", sort=False)[metric_names]
         .agg(["mean", "std", "median", "min", "max"])
         .reset_index()
     )
@@ -161,7 +161,7 @@ def run_comparative_experiment(
         if scenario == "baseline":
             continue
         scenario_metrics = per_seed[per_seed["scenario"] == scenario].set_index("seed")
-        for metric in metrics:
+        for metric in metric_names:
             differences = scenario_metrics[metric] - baseline_metrics[metric]
             for seed, difference in differences.items():
                 paired_rows.append(
