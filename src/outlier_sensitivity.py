@@ -58,7 +58,11 @@ def run_outlier_sensitivity(
 
     id_counts = frame["Id"].value_counts()
     missing_ids = [record_id for record_id in flagged_ids if record_id not in id_counts]
-    duplicate_ids = [record_id for record_id in flagged_ids if id_counts.get(record_id, 0) != 1]
+    duplicate_ids = [
+        record_id
+        for record_id in flagged_ids
+        if id_counts.get(record_id, 0) != 1
+    ]
     if missing_ids:
         raise ValueError(f"Flagged record IDs not found: {missing_ids}")
     if duplicate_ids:
@@ -68,7 +72,6 @@ def run_outlier_sensitivity(
     if TARGET in features.columns or "Id" in features.columns:
         raise ValueError("Target or identifier leakage detected in model features.")
     target_log = np.log1p(frame[TARGET].astype(float))
-    flagged_mask = frame["Id"].isin(flagged_ids)
 
     seed_rows: list[dict[str, float | int]] = []
     flagged_prediction_rows: list[dict[str, float | int]] = []
@@ -83,7 +86,9 @@ def run_outlier_sensitivity(
         y_train_filtered = y_train.loc[keep_train]
         removed_count = int((~keep_train).sum())
         if len(X_train_filtered) < 2:
-            raise ValueError("Too few training rows remain after the sensitivity filter.")
+            raise ValueError(
+                "Too few training rows remain after the sensitivity filter."
+            )
 
         baseline = make_pipeline(
             GradientBoostingRegressor(**MODEL_PARAMS), X_train
@@ -100,7 +105,9 @@ def run_outlier_sensitivity(
 
         baseline_metrics = _metric_values(actual, baseline_pred)
         sensitivity_metrics = _metric_values(actual, sensitivity_pred)
-        non_flagged_valid = ~frame.loc[X_valid.index, "Id"].isin(flagged_ids).to_numpy()
+        non_flagged_valid = ~frame.loc[X_valid.index, "Id"].isin(
+            flagged_ids
+        ).to_numpy()
         non_flagged_baseline = _metric_values(
             actual[non_flagged_valid], baseline_pred[non_flagged_valid]
         )
@@ -119,7 +126,9 @@ def run_outlier_sensitivity(
         for metric in METRICS:
             row[f"baseline_{metric}"] = baseline_metrics[metric]
             row[f"sensitivity_{metric}"] = sensitivity_metrics[metric]
-            row[f"delta_{metric}"] = sensitivity_metrics[metric] - baseline_metrics[metric]
+            row[f"delta_{metric}"] = (
+                sensitivity_metrics[metric] - baseline_metrics[metric]
+            )
             row[f"baseline_non_flagged_{metric}"] = non_flagged_baseline[metric]
             row[f"sensitivity_non_flagged_{metric}"] = non_flagged_sensitivity[metric]
         seed_rows.append(row)
@@ -134,8 +143,12 @@ def run_outlier_sensitivity(
                         "actual_price": float(actual[position]),
                         "baseline_prediction": float(baseline_pred[position]),
                         "sensitivity_prediction": float(sensitivity_pred[position]),
-                        "baseline_absolute_error": float(abs(actual[position] - baseline_pred[position])),
-                        "sensitivity_absolute_error": float(abs(actual[position] - sensitivity_pred[position])),
+                        "baseline_absolute_error": float(
+                            abs(actual[position] - baseline_pred[position])
+                        ),
+                        "sensitivity_absolute_error": float(
+                            abs(actual[position] - sensitivity_pred[position])
+                        ),
                     }
                 )
         LOGGER.info(
@@ -152,6 +165,10 @@ def run_outlier_sensitivity(
     summary_rows: list[dict[str, float | int | str]] = []
     for metric in METRICS:
         deltas = per_seed[f"delta_{metric}"].astype(float)
+        if metric == "R2":
+            wins = int((deltas > 0).sum())
+        else:
+            wins = int((deltas < 0).sum())
         summary_rows.append(
             {
                 "metric": metric,
@@ -161,7 +178,7 @@ def run_outlier_sensitivity(
                 "delta_std": float(deltas.std(ddof=1)),
                 "delta_p10": float(deltas.quantile(0.10)),
                 "delta_p90": float(deltas.quantile(0.90)),
-                "sensitivity_wins": int((deltas < 0).sum() if metric != "R2" else (deltas > 0).sum()),
+                "sensitivity_wins": wins,
                 "ties": int(np.isclose(deltas, 0.0).sum()),
                 "seeds": int(len(deltas)),
             }
@@ -230,7 +247,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--seeds", type=int, default=30)
     parser.add_argument("--start-seed", type=int, default=RANDOM_STATE)
-    parser.add_argument("--flagged-ids", type=int, nargs="+", default=list(DEFAULT_FLAGGED_IDS))
+    parser.add_argument(
+        "--flagged-ids",
+        type=int,
+        nargs="+",
+        default=list(DEFAULT_FLAGGED_IDS),
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     args = parser.parse_args()
     per_seed, summary, flagged_predictions = run_outlier_sensitivity(
