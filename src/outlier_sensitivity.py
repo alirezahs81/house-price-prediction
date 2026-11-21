@@ -216,26 +216,52 @@ def run_outlier_sensitivity(
         json.dumps(metadata, indent=2), encoding="utf-8"
     )
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    x = np.arange(len(METRICS))
-    width = 0.36
-    ax.bar(
-        x - width / 2,
-        [float(per_seed[f"baseline_{metric}"].mean()) for metric in METRICS],
-        width,
-        label="Baseline training",
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    metric_titles = {
+        "MAE": "MAE (USD; lower is better)",
+        "RMSE": "RMSE (USD; lower is better)",
+        "R2": "R² (higher is better)",
+        "RMSLE": "RMSLE (lower is better)",
+    }
+    labels = ("Baseline", "Train-only exclusion")
+    for ax, metric in zip(axes.flat, METRICS):
+        values = [
+            float(per_seed[f"baseline_{metric}"].mean()),
+            float(per_seed[f"sensitivity_{metric}"].mean()),
+        ]
+        bars = ax.bar(labels, values)
+        ax.set_title(metric_titles[metric])
+        ax.grid(axis="y", alpha=0.2)
+        ax.set_axisbelow(True)
+        value_span = max(values) - min(values)
+        padding = max(
+            value_span * 0.15,
+            max(abs(value) for value in values) * 0.04,
+            0.01,
+        )
+        lower = min(0.0, min(values) - padding)
+        upper = max(values) + padding
+        ax.set_ylim(lower, upper)
+        for bar, value in zip(bars, values):
+            label = f"${value:,.0f}" if metric in ("MAE", "RMSE") else f"{value:.4f}"
+            ax.annotate(
+                label,
+                (bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                xytext=(0, 4),
+                textcoords="offset points",
+                ha="center",
+                va="bottom",
+                fontsize=9,
+            )
+    fig.suptitle("30-seed train-only outlier sensitivity comparison")
+    fig.text(
+        0.5,
+        0.015,
+        "Primary metrics use every validation row; flagged rows are excluded only from training.",
+        ha="center",
+        fontsize=9,
     )
-    ax.bar(
-        x + width / 2,
-        [float(per_seed[f"sensitivity_{metric}"].mean()) for metric in METRICS],
-        width,
-        label="Flagged rows excluded from training",
-    )
-    ax.set_xticks(x, METRICS)
-    ax.set_title("30-seed train-only outlier sensitivity comparison")
-    ax.legend()
-    ax.grid(axis="y", alpha=0.2)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.04, 1, 0.96))
     fig.savefig(output_dir / "outlier_sensitivity_comparison.png", dpi=160)
     plt.close(fig)
 
