@@ -43,6 +43,8 @@ def test_comparison_uses_all_validation_rows_and_writes_reports(
     assert not bands.empty
     for filename in (
         "comparative_by_seed.csv",
+        "comparative_paired_differences.csv",
+        "comparative_paired_summary.csv",
         "comparative_summary.csv",
         "comparative_by_price_band.csv",
         "comparative_row_level_predictions.csv",
