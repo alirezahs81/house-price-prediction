@@ -2,7 +2,6 @@
 
 import json
 import logging
-import time
 from typing import Any
 
 import joblib
@@ -10,12 +9,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.dummy import DummyRegressor
+from sklearn.inspection import permutation_importance
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import (
     KFold,
     ParameterGrid,
     RandomizedSearchCV,
-    RepeatedKFold,
     cross_val_score,
     train_test_split,
 )
@@ -34,6 +33,7 @@ from src.data_validation import validate_training_data
 from src.evaluate import regression_metrics, save_diagnostics
 from src.exploratory_analysis import run_eda
 from src.modeling import candidate_models, make_pipeline
+from src.nested_cv import nested_cv_model_comparison
 from src.preprocessing import prepare_features, transform_absence_categories
 
 logging.basicConfig(
@@ -82,6 +82,13 @@ def train() -> dict[str, Any]:
     df = load_train()
     validate_training_data(df)
 
+    # Remove previous-run feature-importance outputs so failed/unsupported
+    # estimators cannot leave stale files in the uploaded reports artifact.
+    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    (METRICS_DIR / "feature_importance.csv").unlink(missing_ok=True)
+    (FIGURES_DIR / "feature_importance.png").unlink(missing_ok=True)
+
     # EDA is descriptive only; no EDA statistic is used to fit model features.
     run_eda()
 
@@ -97,28 +104,34 @@ def train() -> dict[str, Any]:
         test_size=0.2,
         random_state=RANDOM_STATE,
     )
-    model_cv = RepeatedKFold(
-        n_splits=5,
-        n_repeats=2,
-        random_state=RANDOM_STATE,
+    # Nested CV evaluates each model family with its tuning contained inside
+    # the outer training fold. The final holdout remains untouched.
+    LOGGER.info("Running nested CV for model-family comparison")
+    nested_results, nested_tuning_rows, outer_fold_rows = (
+        nested_cv_model_comparison(
+            X_train=X_train,
+            y_train=y_train,
+            models=candidate_models(),
+            search_spaces={name: _search_space(name) for name in candidate_models()},
+            pipeline_factory=make_pipeline,
+            outer_splits=5,
+            inner_splits=3,
+            n_iter=3,
+            random_state=RANDOM_STATE,
+        )
     )
-    tuning_cv = KFold(
-        n_splits=5,
-        shuffle=True,
-        random_state=RANDOM_STATE,
-    )
-    rows: list[dict[str, Any]] = []
-    tuning_rows: list[dict[str, Any]] = []
+    rows = nested_results.to_dict(orient="records")
+    tuning_rows: list[dict[str, Any]] = list(nested_tuning_rows)
     candidate_results: dict[str, dict[str, Any]] = {}
+    tuning_cv = KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 
-    # Tune each family with the same shuffled five-fold protocol, then
-    # compare the selected configurations on identical repeated 5x2 folds.
-    # All preprocessing remains inside each cloned pipeline and fold.
+    # After nested evaluation, tune each family on the full training partition
+    # to produce final candidate pipelines. Family ranking comes only from
+    # the outer-fold scores, not these post-selection tuning scores.
     for name, estimator in candidate_models().items():
-        LOGGER.info("Tuning and cross-validating %s", name)
+        LOGGER.info("Final training-partition tuning for %s", name)
         pipeline = make_pipeline(estimator, X_train)
         params = _search_space(name)
-        started = time.time()
 
         if params:
             search = RandomizedSearchCV(
@@ -135,12 +148,14 @@ def train() -> dict[str, Any]:
             search.fit(X_train, y_train)
             selected_estimator = search.best_estimator_
             best_params = search.best_params_
-            cv_mean = float(-search.best_score_)
-            cv_std = float(search.cv_results_["std_test_score"][search.best_index_])
-
+            final_tuning_mean = float(-search.best_score_)
+            final_tuning_std = float(
+                search.cv_results_["std_test_score"][search.best_index_]
+            )
             for index, candidate_params in enumerate(search.cv_results_["params"]):
                 tuning_rows.append(
                     {
+                        "stage": "final_training_tuning",
                         "model": name,
                         "params": candidate_params,
                         "cv_log_rmse_mean": float(
@@ -153,6 +168,9 @@ def train() -> dict[str, Any]:
                     }
                 )
         else:
+            # These families have no hyperparameter search space. Report a
+            # separate training-partition CV estimate rather than reusing the
+            # nested outer-fold score under a misleading tuning label.
             scores = cross_val_score(
                 pipeline,
                 X_train,
@@ -163,14 +181,15 @@ def train() -> dict[str, Any]:
             )
             selected_estimator = pipeline.fit(X_train, y_train)
             best_params = {}
-            cv_mean = float(-scores.mean())
-            cv_std = float(scores.std())
+            final_tuning_mean = float(-scores.mean())
+            final_tuning_std = float(scores.std())
             tuning_rows.append(
                 {
+                    "stage": "final_training_cv",
                     "model": name,
                     "params": {},
-                    "cv_log_rmse_mean": cv_mean,
-                    "cv_log_rmse_std": cv_std,
+                    "cv_log_rmse_mean": final_tuning_mean,
+                    "cv_log_rmse_std": final_tuning_std,
                     "rank": 1,
                 }
             )
@@ -178,46 +197,29 @@ def train() -> dict[str, Any]:
         candidate_results[name] = {
             "estimator": selected_estimator,
             "best_params": best_params,
+            "final_tuning_cv_log_rmse_mean": final_tuning_mean,
+            "final_tuning_cv_log_rmse_std": final_tuning_std,
         }
-        tuning_cv_mean = cv_mean
-        tuning_cv_std = cv_std
-        comparison_scores = cross_val_score(
-            selected_estimator,
-            X_train,
-            y_train,
-            cv=model_cv,
-            scoring="neg_root_mean_squared_error",
-            n_jobs=1,
-        )
-        cv_mean = float(-comparison_scores.mean())
-        cv_std = float(comparison_scores.std())
-        rows.append(
-            {
-                "model": name,
-                "cv_log_rmse_mean": cv_mean,
-                "cv_log_rmse_std": cv_std,
-                "cv_folds": 10,
-                "tuning_cv_log_rmse_mean": tuning_cv_mean,
-                "tuning_cv_log_rmse_std": tuning_cv_std,
-                "cv_seconds": round(time.time() - started, 2),
-            }
-        )
+    outer_fold_results = pd.DataFrame(outer_fold_rows)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    outer_fold_results.to_csv(
+        REPORTS_DIR / "nested_cv_outer_fold_results.csv", index=False
+    )
 
     results = pd.DataFrame(rows).sort_values("cv_log_rmse_mean")
     tuning_results = pd.DataFrame(tuning_rows).sort_values(
         "cv_log_rmse_mean"
     )
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    METRICS_DIR.mkdir(parents=True, exist_ok=True)
-    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     results.to_csv(REPORTS_DIR / "model_comparison.csv", index=False)
     tuning_results.to_csv(REPORTS_DIR / "tuning_comparison.csv", index=False)
 
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.barh(results["model"], results["cv_log_rmse_mean"])
     ax.set(
-        xlabel="Repeated 5x2 CV RMSE (log-price)",
-        title="Tuned Candidate Model Comparison",
+        xlabel="Nested 5-fold CV RMSE (log-price)",
+        title="Nested-CV Model Family Comparison",
     )
     ax.invert_yaxis()
     fig.tight_layout()
@@ -226,14 +228,19 @@ def train() -> dict[str, Any]:
 
     best_name = str(results.iloc[0]["model"])
     best_cv_row = results.iloc[0]
-    LOGGER.info("Best tuned cross-validated model family: %s", best_name)
+    LOGGER.info("Best nested-CV model family: %s", best_name)
     selected = candidate_results[best_name]["estimator"]
     best_params = candidate_results[best_name]["best_params"]
 
-    # The selected model's repeated-CV metrics were calculated for every
-    # candidate above, using the same folds and training-only data.
-    tuned_cv_log_rmse_mean = float(best_cv_row["cv_log_rmse_mean"])
-    tuned_cv_log_rmse_std = float(best_cv_row["cv_log_rmse_std"])
+    # Nested outer-fold scores estimate the full model-selection procedure.
+    # Final tuning CV scores are reported separately and are not used to rank
+    # model families.
+    tuned_cv_log_rmse_mean = float(
+        candidate_results[best_name]["final_tuning_cv_log_rmse_mean"]
+    )
+    tuned_cv_log_rmse_std = float(
+        candidate_results[best_name]["final_tuning_cv_log_rmse_std"]
+    )
 
     train_log_predictions = selected.predict(X_train)
     validation_log_predictions = selected.predict(X_val)
@@ -274,7 +281,9 @@ def train() -> dict[str, Any]:
             "selected_model": best_name,
             "best_params": best_params,
             "validation_rows": int(len(y_val)),
-            "repeated_cv_folds": 10,
+            "nested_cv_outer_folds": 5,
+            "nested_cv_inner_folds": 3,
+            "nested_cv_search_iterations_per_family": 3,
             "selected_family_cv_log_rmse_mean": float(
                 best_cv_row["cv_log_rmse_mean"]
             ),
@@ -296,33 +305,54 @@ def train() -> dict[str, Any]:
                 "validation_error_by_price_band.csv",
                 "model_comparison.csv",
                 "tuning_comparison.csv",
+                "nested_cv_outer_fold_results.csv",
             ],
             "cv_metric_note": (
-                "Each supported family receives the same eight-iteration "
-                "randomized search budget using shuffled five-fold CV. The "
-                "selected configuration for every family is then compared on "
-                "the same repeated five-fold CV (five folds repeated twice), "
-                "using training-partition rows only. The untouched final holdout "
-                "is excluded from all fitting, tuning, and model selection."
+                "Model families are compared using nested five-fold CV. In each "
+                "outer fold, hyperparameter tuning uses only the outer training "
+                "partition with three-fold CV and a three-iteration randomized "
+                "search. Outer validation folds are never used for tuning. After "
+                "nested evaluation, tunable families receive a separate "
+                "search on the full training partition. Families without search "
+                "spaces receive a separate five-fold training CV estimate. "
+                "Neither is used for family ranking. "
+                "The validation holdout is excluded from nested CV, tuning, "
+                "and model selection, and is used only for final evaluation "
+                "and post-selection explanation. After reporting those results, "
+                "the saved final pipeline is refit on all labeled training rows, "
+                "including the holdout, for deployment; that refit does not "
+                "change the reported holdout metrics."
             ),
         }
+    )
+    metrics["feature_importance_method"] = (
+        "Validation permutation importance is generated after model selection "
+        "for explanation only; it is not used for fitting, tuning, or selecting "
+        "the model."
     )
     (METRICS_DIR / "validation_metrics.json").write_text(
         json.dumps(metrics, indent=2),
         encoding="utf-8",
     )
 
-    # Refit only after holdout evaluation; the holdout is never used for fitting.
-    final_pipeline = selected.fit(X, y)
+    # Explain the selected model using validation permutation importance.
+    # This is post-evaluation reporting only; it never selects or tunes a model.
     try:
-        feature_names = final_pipeline.named_steps[
-            "preprocessor"
-        ].get_feature_names_out()
-        importances = final_pipeline.named_steps["model"].feature_importances_
+        permutation = permutation_importance(
+            selected,
+            X_val,
+            y_val,
+            scoring="neg_root_mean_squared_error",
+            n_repeats=5,
+            random_state=RANDOM_STATE,
+            n_jobs=1,
+        )
         importance = pd.DataFrame(
             {
-                "feature": feature_names,
-                "importance": importances,
+                "feature": X_val.columns,
+                "importance": permutation.importances_mean,
+                "importance_std": permutation.importances_std,
+                "method": "validation_permutation_importance",
             }
         ).sort_values("importance", ascending=False).head(25)
         importance.to_csv(METRICS_DIR / "feature_importance.csv", index=False)
@@ -330,18 +360,23 @@ def train() -> dict[str, Any]:
         ax.barh(
             importance["feature"][::-1],
             importance["importance"][::-1],
+            xerr=importance["importance_std"][::-1],
         )
         ax.set(
-            xlabel="Feature importance",
-            title="Top 25 Feature Importances",
+            xlabel="Decrease in negative log-RMSE score after permutation",
+            title="Top 25 Validation Permutation Importances",
         )
         fig.tight_layout()
         fig.savefig(FIGURES_DIR / "feature_importance.png", dpi=150)
         plt.close(fig)
-    except (AttributeError, ValueError):
-        LOGGER.warning(
-            "Feature importance is not supported by selected estimator."
-        )
+    except (AttributeError, ValueError, TypeError) as error:
+        LOGGER.warning("Could not generate permutation importance: %s", error)
+
+    # After holdout metrics and explanatory importance are recorded, refit the
+    # chosen configuration on all labeled training rows for the final artifact.
+    # This deployment refit includes the validation holdout but does not alter
+    # the already-reported holdout metrics or model-family selection.
+    final_pipeline = selected.fit(X, y)
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(final_pipeline, MODEL_FILE)
