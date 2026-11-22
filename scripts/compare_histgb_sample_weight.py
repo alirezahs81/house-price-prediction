@@ -67,7 +67,9 @@ def _paired_summary(
             "mean_delta_weighted_minus_baseline": float(delta.mean()),
             "delta_ci95_low": float(np.quantile(bootstrap, 0.025)),
             "delta_ci95_high": float(np.quantile(bootstrap, 0.975)),
-            "weighted_wins": int((delta > 0).sum() if metric.endswith("R2") else (delta < 0).sum()),
+            "weighted_wins": int(
+                (delta > 0).sum() if metric.endswith("R2") else (delta < 0).sum()
+            ),
             "paired_seeds": int(len(delta)),
         }
     return result
