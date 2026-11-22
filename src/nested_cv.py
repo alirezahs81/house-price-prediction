@@ -1,14 +1,15 @@
 """Leakage-safe nested cross-validation for model-family selection."""
 
+import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold, ParameterGrid, RandomizedSearchCV
-from sklearn.pipeline import Pipeline
 from sklearn.base import clone
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold, ParameterGrid, RandomizedSearchCV
+from sklearn.pipeline import Pipeline
 
 
 def nested_cv_model_comparison(
@@ -41,8 +42,10 @@ def nested_cv_model_comparison(
     outer_indices = list(outer_cv.split(X_train, y_train))
     fold_rows: list[dict[str, Any]] = []
     tuning_rows: list[dict[str, Any]] = []
+    model_seconds: dict[str, float] = {}
 
     for model_name, estimator in models.items():
+        model_started = time.perf_counter()
         space = search_spaces.get(model_name, {})
         for fold_number, (train_idx, valid_idx) in enumerate(outer_indices, start=1):
             X_outer_train = X_train.iloc[train_idx]
@@ -107,6 +110,7 @@ def nested_cv_model_comparison(
                     "validation_indices": valid_idx.tolist(),
                 }
             )
+        model_seconds[model_name] = round(time.perf_counter() - model_started, 2)
 
     fold_frame = pd.DataFrame(fold_rows)
     summary = (
@@ -119,7 +123,7 @@ def nested_cv_model_comparison(
         .sort_values("cv_log_rmse_mean")
         .reset_index(drop=True)
     )
-    summary["cv_seconds"] = np.nan
+    summary["cv_seconds"] = summary["model"].map(model_seconds)
     summary["cv_method"] = "nested_kfold"
     summary["inner_splits"] = inner_splits
     summary["search_iterations"] = n_iter
