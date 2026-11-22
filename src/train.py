@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from sklearn.dummy import DummyRegressor
 from sklearn.metrics import mean_squared_error
+from sklearn.inspection import permutation_importance
 from sklearn.model_selection import (
     KFold,
     ParameterGrid,
@@ -79,6 +80,13 @@ def train() -> dict[str, Any]:
     """Train candidate models, evaluate the winner, and persist the final model."""
     df = load_train()
     validate_training_data(df)
+
+    # Remove previous-run feature-importance outputs so failed/unsupported
+    # estimators cannot leave stale files in the uploaded reports artifact.
+    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    (METRICS_DIR / "feature_importance.csv").unlink(missing_ok=True)
+    (FIGURES_DIR / "feature_importance.png").unlink(missing_ok=True)
 
     # EDA is descriptive only; no EDA statistic is used to fit model features.
     run_eda()
@@ -306,17 +314,24 @@ def train() -> dict[str, Any]:
         encoding="utf-8",
     )
 
-    # Refit only after holdout evaluation; the holdout is never used for fitting.
-    final_pipeline = selected.fit(X, y)
+    # Explain the selected model using validation permutation importance.
+    # This is post-evaluation reporting only; it never selects or tunes a model.
     try:
-        feature_names = final_pipeline.named_steps[
-            "preprocessor"
-        ].get_feature_names_out()
-        importances = final_pipeline.named_steps["model"].feature_importances_
+        permutation = permutation_importance(
+            selected,
+            X_val,
+            y_val,
+            scoring="neg_root_mean_squared_error",
+            n_repeats=5,
+            random_state=RANDOM_STATE,
+            n_jobs=1,
+        )
         importance = pd.DataFrame(
             {
-                "feature": feature_names,
-                "importance": importances,
+                "feature": X_val.columns,
+                "importance": permutation.importances_mean,
+                "importance_std": permutation.importances_std,
+                "method": "validation_permutation_importance",
             }
         ).sort_values("importance", ascending=False).head(25)
         importance.to_csv(METRICS_DIR / "feature_importance.csv", index=False)
@@ -324,18 +339,20 @@ def train() -> dict[str, Any]:
         ax.barh(
             importance["feature"][::-1],
             importance["importance"][::-1],
+            xerr=importance["importance_std"][::-1],
         )
         ax.set(
-            xlabel="Feature importance",
-            title="Top 25 Feature Importances",
+            xlabel="Decrease in negative log-RMSE score after permutation",
+            title="Top 25 Validation Permutation Importances",
         )
         fig.tight_layout()
         fig.savefig(FIGURES_DIR / "feature_importance.png", dpi=150)
         plt.close(fig)
-    except (AttributeError, ValueError):
-        LOGGER.warning(
-            "Feature importance is not supported by selected estimator."
-        )
+    except (AttributeError, ValueError, TypeError) as error:
+        LOGGER.warning("Could not generate permutation importance: %s", error)
+
+    # Refit only after holdout evaluation; the holdout is never used for fitting.
+    final_pipeline = selected.fit(X, y)
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     joblib.dump(final_pipeline, MODEL_FILE)
