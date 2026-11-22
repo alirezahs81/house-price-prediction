@@ -26,6 +26,22 @@ def test_make_price_weights_reject_invalid_prices() -> None:
         weighted.make_price_weights(pd.Series([100_000, np.nan]))
 
 
+@pytest.mark.parametrize(
+    ("lower", "upper"),
+    [
+        (0.75, np.inf),
+        (np.nan, 1.75),
+        (-np.inf, 1.75),
+        (0.75, np.nan),
+    ],
+)
+def test_make_price_weights_reject_non_finite_bounds(
+    lower: float, upper: float
+) -> None:
+    with pytest.raises(ValueError, match="Weight bounds must be finite"):
+        weighted.make_price_weights(pd.Series([100_000, 200_000]), lower, upper)
+
+
 def test_validate_seed_count_requires_two_or_more() -> None:
     with pytest.raises(ValueError, match="at least 2"):
         weighted.validate_seed_count(1)
