@@ -151,8 +151,12 @@ def summarize_comparison(results: pd.DataFrame) -> pd.DataFrame:
                         "median": float(delta.median()),
                         "p10": float(delta.quantile(0.10)),
                         "p90": float(delta.quantile(0.90)),
-                        "weighted_wins": int((delta < 0).sum()),
-                        "baseline_wins": int((delta > 0).sum()),
+                        "weighted_wins": int(
+                            (delta > 0).sum() if metric == "R2" else (delta < 0).sum()
+                        ),
+                        "baseline_wins": int(
+                            (delta < 0).sum() if metric == "R2" else (delta > 0).sum()
+                        ),
                         "ties": int((delta == 0).sum()),
                     },
                 ]
