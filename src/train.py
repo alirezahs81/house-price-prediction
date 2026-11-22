@@ -2,7 +2,6 @@
 
 import json
 import logging
-import time
 from typing import Any
 
 import joblib
@@ -183,6 +182,9 @@ def train() -> dict[str, Any]:
             "final_tuning_cv_log_rmse_std": final_tuning_std,
         }
     outer_fold_results = pd.DataFrame(outer_fold_rows)
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     outer_fold_results.to_csv(
         REPORTS_DIR / "nested_cv_outer_fold_results.csv", index=False
     )
@@ -191,9 +193,6 @@ def train() -> dict[str, Any]:
     tuning_results = pd.DataFrame(tuning_rows).sort_values(
         "cv_log_rmse_mean"
     )
-    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
-    METRICS_DIR.mkdir(parents=True, exist_ok=True)
-    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     results.to_csv(REPORTS_DIR / "model_comparison.csv", index=False)
     tuning_results.to_csv(REPORTS_DIR / "tuning_comparison.csv", index=False)
 
@@ -210,7 +209,7 @@ def train() -> dict[str, Any]:
 
     best_name = str(results.iloc[0]["model"])
     best_cv_row = results.iloc[0]
-    LOGGER.info("Best tuned cross-validated model family: %s", best_name)
+    LOGGER.info("Best nested-CV model family: %s", best_name)
     selected = candidate_results[best_name]["estimator"]
     best_params = candidate_results[best_name]["best_params"]
 
