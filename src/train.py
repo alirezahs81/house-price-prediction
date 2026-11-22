@@ -15,6 +15,7 @@ from sklearn.model_selection import (
     KFold,
     ParameterGrid,
     RandomizedSearchCV,
+    cross_val_score,
     train_test_split,
 )
 
@@ -167,14 +168,24 @@ def train() -> dict[str, Any]:
                     }
                 )
         else:
+            # These families have no hyperparameter search space. Report a
+            # separate training-partition CV estimate rather than reusing the
+            # nested outer-fold score under a misleading tuning label.
+            scores = cross_val_score(
+                pipeline,
+                X_train,
+                y_train,
+                cv=tuning_cv,
+                scoring="neg_root_mean_squared_error",
+                n_jobs=1,
+            )
             selected_estimator = pipeline.fit(X_train, y_train)
             best_params = {}
-            family_row = nested_results.loc[nested_results["model"] == name].iloc[0]
-            final_tuning_mean = float(family_row["cv_log_rmse_mean"])
-            final_tuning_std = float(family_row["cv_log_rmse_std"])
+            final_tuning_mean = float(-scores.mean())
+            final_tuning_std = float(scores.std())
             tuning_rows.append(
                 {
-                    "stage": "final_training_tuning",
+                    "stage": "final_training_cv",
                     "model": name,
                     "params": {},
                     "cv_log_rmse_mean": final_tuning_mean,
@@ -301,9 +312,10 @@ def train() -> dict[str, Any]:
                 "outer fold, hyperparameter tuning uses only the outer training "
                 "partition with three-fold CV and a three-iteration randomized "
                 "search. Outer validation folds are never used for tuning. After "
-                "nested evaluation, each family is tuned on the full training "
-                "partition for final candidate pipelines; those tuning scores "
-                "are reported separately and are not used for family ranking. "
+                "nested evaluation, tunable families receive a separate "
+                "search on the full training partition. Families without search "
+                "spaces receive a separate five-fold training CV estimate. "
+                "Neither is used for family ranking. "
                 "The validation holdout is excluded from nested CV, tuning, "
                 "and model selection, and is used only for final evaluation "
                 "and post-selection explanation. After reporting those results, "
