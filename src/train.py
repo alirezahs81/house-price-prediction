@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.dummy import DummyRegressor
-from sklearn.metrics import mean_squared_error
 from sklearn.inspection import permutation_importance
+from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import (
     KFold,
     ParameterGrid,
@@ -308,6 +308,11 @@ def train() -> dict[str, Any]:
                 "tuning, and model selection."
             ),
         }
+    )
+    metrics["feature_importance_method"] = (
+        "Validation permutation importance is generated after model selection "
+        "for explanation only; it is not used for fitting, tuning, or selecting "
+        "the model."
     )
     (METRICS_DIR / "validation_metrics.json").write_text(
         json.dumps(metrics, indent=2),
