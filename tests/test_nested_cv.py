@@ -1,7 +1,10 @@
 """Tests for leakage-safe nested cross-validation."""
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
+import pytest
 from sklearn.dummy import DummyRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
@@ -9,11 +12,11 @@ from sklearn.preprocessing import StandardScaler
 from src.nested_cv import nested_cv_model_comparison
 
 
-def _pipeline(estimator, _X):
+def _pipeline(estimator: Any, _X: pd.DataFrame) -> Pipeline:
     return Pipeline([("scale", StandardScaler()), ("model", estimator)])
 
 
-def test_nested_cv_uses_same_outer_validation_indices_for_each_family():
+def test_nested_cv_uses_same_outer_validation_indices_for_each_family() -> None:
     X = pd.DataFrame({"x": np.arange(30, dtype=float)})
     y = pd.Series(np.arange(30, dtype=float))
     models = {
@@ -45,11 +48,11 @@ def test_nested_cv_uses_same_outer_validation_indices_for_each_family():
     assert all_indices == list(range(len(X)))
 
 
-def test_nested_cv_rejects_invalid_fold_counts():
+def test_nested_cv_rejects_invalid_fold_counts() -> None:
     X = pd.DataFrame({"x": np.arange(10, dtype=float)})
     y = pd.Series(np.arange(10, dtype=float))
 
-    try:
+    with pytest.raises(ValueError, match="CV splits"):
         nested_cv_model_comparison(
             X_train=X,
             y_train=y,
@@ -58,7 +61,3 @@ def test_nested_cv_rejects_invalid_fold_counts():
             pipeline_factory=_pipeline,
             outer_splits=1,
         )
-    except ValueError as exc:
-        assert "CV splits" in str(exc)
-    else:
-        raise AssertionError("Expected invalid outer split count to raise ValueError")
