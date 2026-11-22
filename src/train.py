@@ -304,8 +304,12 @@ def train() -> dict[str, Any]:
                 "nested evaluation, each family is tuned on the full training "
                 "partition for final candidate pipelines; those tuning scores "
                 "are reported separately and are not used for family ranking. "
-                "The untouched final holdout is excluded from all fitting, "
-                "tuning, and model selection."
+                "The validation holdout is excluded from nested CV, tuning, "
+                "and model selection, and is used only for final evaluation "
+                "and post-selection explanation. After reporting those results, "
+                "the saved final pipeline is refit on all labeled training rows, "
+                "including the holdout, for deployment; that refit does not "
+                "change the reported holdout metrics."
             ),
         }
     )
@@ -356,7 +360,10 @@ def train() -> dict[str, Any]:
     except (AttributeError, ValueError, TypeError) as error:
         LOGGER.warning("Could not generate permutation importance: %s", error)
 
-    # Refit only after holdout evaluation; the holdout is never used for fitting.
+    # After holdout metrics and explanatory importance are recorded, refit the
+    # chosen configuration on all labeled training rows for the final artifact.
+    # This deployment refit includes the validation holdout but does not alter
+    # the already-reported holdout metrics or model-family selection.
     final_pipeline = selected.fit(X, y)
 
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
