@@ -25,7 +25,18 @@ from src.data_validation import validate_training_data
 from src.evaluate import regression_metrics
 from src.modeling import make_pipeline
 from src.preprocessing import prepare_features, transform_absence_categories
-from src.robustness import MODEL_PARAMS
+# Keep the experiment self-contained so it can run against main without
+# depending on the broader robustness branch.
+MODEL_PARAMS: dict[str, Any] = {
+    "n_estimators": 500,
+    "learning_rate": 0.05,
+    "max_depth": 3,
+    "min_samples_leaf": 2,
+    "subsample": 0.8,
+    "loss": "huber",
+    "alpha": 0.95,
+    "random_state": RANDOM_STATE,
+}
 
 LOGGER = logging.getLogger(__name__)
 DEFAULT_OUTPUT_DIR = Path("reports/weighted_robustness")
