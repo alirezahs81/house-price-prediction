@@ -15,8 +15,6 @@ from sklearn.model_selection import (
     KFold,
     ParameterGrid,
     RandomizedSearchCV,
-    RepeatedKFold,
-    cross_val_score,
     train_test_split,
 )
 
@@ -34,6 +32,7 @@ from src.data_validation import validate_training_data
 from src.evaluate import regression_metrics, save_diagnostics
 from src.exploratory_analysis import run_eda
 from src.modeling import candidate_models, make_pipeline
+from src.nested_cv import nested_cv_model_comparison
 from src.preprocessing import prepare_features, transform_absence_categories
 
 logging.basicConfig(
@@ -97,28 +96,34 @@ def train() -> dict[str, Any]:
         test_size=0.2,
         random_state=RANDOM_STATE,
     )
-    model_cv = RepeatedKFold(
-        n_splits=5,
-        n_repeats=2,
-        random_state=RANDOM_STATE,
+    # Nested CV evaluates each model family with its tuning contained inside
+    # the outer training fold. The final holdout remains untouched.
+    LOGGER.info("Running nested CV for model-family comparison")
+    nested_results, nested_tuning_rows, outer_fold_rows = (
+        nested_cv_model_comparison(
+            X_train=X_train,
+            y_train=y_train,
+            models=candidate_models(),
+            search_spaces={name: _search_space(name) for name in candidate_models()},
+            pipeline_factory=make_pipeline,
+            outer_splits=5,
+            inner_splits=3,
+            n_iter=3,
+            random_state=RANDOM_STATE,
+        )
     )
-    tuning_cv = KFold(
-        n_splits=5,
-        shuffle=True,
-        random_state=RANDOM_STATE,
-    )
-    rows: list[dict[str, Any]] = []
-    tuning_rows: list[dict[str, Any]] = []
+    rows = nested_results.to_dict(orient="records")
+    tuning_rows: list[dict[str, Any]] = list(nested_tuning_rows)
     candidate_results: dict[str, dict[str, Any]] = {}
+    tuning_cv = KFold(n_splits=5, shuffle=True, random_state=RANDOM_STATE)
 
-    # Tune each family with the same shuffled five-fold protocol, then
-    # compare the selected configurations on identical repeated 5x2 folds.
-    # All preprocessing remains inside each cloned pipeline and fold.
+    # After nested evaluation, tune each family on the full training partition
+    # to produce final candidate pipelines. Family ranking comes only from
+    # the outer-fold scores, not these post-selection tuning scores.
     for name, estimator in candidate_models().items():
-        LOGGER.info("Tuning and cross-validating %s", name)
+        LOGGER.info("Final training-partition tuning for %s", name)
         pipeline = make_pipeline(estimator, X_train)
         params = _search_space(name)
-        started = time.time()
 
         if params:
             search = RandomizedSearchCV(
@@ -135,12 +140,14 @@ def train() -> dict[str, Any]:
             search.fit(X_train, y_train)
             selected_estimator = search.best_estimator_
             best_params = search.best_params_
-            cv_mean = float(-search.best_score_)
-            cv_std = float(search.cv_results_["std_test_score"][search.best_index_])
-
+            final_tuning_mean = float(-search.best_score_)
+            final_tuning_std = float(
+                search.cv_results_["std_test_score"][search.best_index_]
+            )
             for index, candidate_params in enumerate(search.cv_results_["params"]):
                 tuning_rows.append(
                     {
+                        "stage": "final_training_tuning",
                         "model": name,
                         "params": candidate_params,
                         "cv_log_rmse_mean": float(
@@ -153,24 +160,18 @@ def train() -> dict[str, Any]:
                     }
                 )
         else:
-            scores = cross_val_score(
-                pipeline,
-                X_train,
-                y_train,
-                cv=tuning_cv,
-                scoring="neg_root_mean_squared_error",
-                n_jobs=1,
-            )
             selected_estimator = pipeline.fit(X_train, y_train)
             best_params = {}
-            cv_mean = float(-scores.mean())
-            cv_std = float(scores.std())
+            family_row = nested_results.loc[nested_results["model"] == name].iloc[0]
+            final_tuning_mean = float(family_row["cv_log_rmse_mean"])
+            final_tuning_std = float(family_row["cv_log_rmse_std"])
             tuning_rows.append(
                 {
+                    "stage": "final_training_tuning",
                     "model": name,
                     "params": {},
-                    "cv_log_rmse_mean": cv_mean,
-                    "cv_log_rmse_std": cv_std,
+                    "cv_log_rmse_mean": final_tuning_mean,
+                    "cv_log_rmse_std": final_tuning_std,
                     "rank": 1,
                 }
             )
@@ -178,30 +179,13 @@ def train() -> dict[str, Any]:
         candidate_results[name] = {
             "estimator": selected_estimator,
             "best_params": best_params,
+            "final_tuning_cv_log_rmse_mean": final_tuning_mean,
+            "final_tuning_cv_log_rmse_std": final_tuning_std,
         }
-        tuning_cv_mean = cv_mean
-        tuning_cv_std = cv_std
-        comparison_scores = cross_val_score(
-            selected_estimator,
-            X_train,
-            y_train,
-            cv=model_cv,
-            scoring="neg_root_mean_squared_error",
-            n_jobs=1,
-        )
-        cv_mean = float(-comparison_scores.mean())
-        cv_std = float(comparison_scores.std())
-        rows.append(
-            {
-                "model": name,
-                "cv_log_rmse_mean": cv_mean,
-                "cv_log_rmse_std": cv_std,
-                "cv_folds": 10,
-                "tuning_cv_log_rmse_mean": tuning_cv_mean,
-                "tuning_cv_log_rmse_std": tuning_cv_std,
-                "cv_seconds": round(time.time() - started, 2),
-            }
-        )
+    outer_fold_results = pd.DataFrame(outer_fold_rows)
+    outer_fold_results.to_csv(
+        REPORTS_DIR / "nested_cv_outer_fold_results.csv", index=False
+    )
 
     results = pd.DataFrame(rows).sort_values("cv_log_rmse_mean")
     tuning_results = pd.DataFrame(tuning_rows).sort_values(
@@ -216,8 +200,8 @@ def train() -> dict[str, Any]:
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.barh(results["model"], results["cv_log_rmse_mean"])
     ax.set(
-        xlabel="Repeated 5x2 CV RMSE (log-price)",
-        title="Tuned Candidate Model Comparison",
+        xlabel="Nested 5-fold CV RMSE (log-price)",
+        title="Nested-CV Model Family Comparison",
     )
     ax.invert_yaxis()
     fig.tight_layout()
@@ -230,10 +214,15 @@ def train() -> dict[str, Any]:
     selected = candidate_results[best_name]["estimator"]
     best_params = candidate_results[best_name]["best_params"]
 
-    # The selected model's repeated-CV metrics were calculated for every
-    # candidate above, using the same folds and training-only data.
-    tuned_cv_log_rmse_mean = float(best_cv_row["cv_log_rmse_mean"])
-    tuned_cv_log_rmse_std = float(best_cv_row["cv_log_rmse_std"])
+    # Nested outer-fold scores estimate the full model-selection procedure.
+    # Final tuning CV scores are reported separately and are not used to rank
+    # model families.
+    tuned_cv_log_rmse_mean = float(
+        candidate_results[best_name]["final_tuning_cv_log_rmse_mean"]
+    )
+    tuned_cv_log_rmse_std = float(
+        candidate_results[best_name]["final_tuning_cv_log_rmse_std"]
+    )
 
     train_log_predictions = selected.predict(X_train)
     validation_log_predictions = selected.predict(X_val)
@@ -274,7 +263,9 @@ def train() -> dict[str, Any]:
             "selected_model": best_name,
             "best_params": best_params,
             "validation_rows": int(len(y_val)),
-            "repeated_cv_folds": 10,
+            "nested_cv_outer_folds": 5,
+            "nested_cv_inner_folds": 3,
+            "nested_cv_search_iterations_per_family": 3,
             "selected_family_cv_log_rmse_mean": float(
                 best_cv_row["cv_log_rmse_mean"]
             ),
@@ -296,14 +287,18 @@ def train() -> dict[str, Any]:
                 "validation_error_by_price_band.csv",
                 "model_comparison.csv",
                 "tuning_comparison.csv",
+                "nested_cv_outer_fold_results.csv",
             ],
             "cv_metric_note": (
-                "Each supported family receives the same eight-iteration "
-                "randomized search budget using shuffled five-fold CV. The "
-                "selected configuration for every family is then compared on "
-                "the same repeated five-fold CV (five folds repeated twice), "
-                "using training-partition rows only. The untouched final holdout "
-                "is excluded from all fitting, tuning, and model selection."
+                "Model families are compared using nested five-fold CV. In each "
+                "outer fold, hyperparameter tuning uses only the outer training "
+                "partition with three-fold CV and a three-iteration randomized "
+                "search. Outer validation folds are never used for tuning. After "
+                "nested evaluation, each family is tuned on the full training "
+                "partition for final candidate pipelines; those tuning scores "
+                "are reported separately and are not used for family ranking. "
+                "The untouched final holdout is excluded from all fitting, "
+                "tuning, and model selection."
             ),
         }
     )
