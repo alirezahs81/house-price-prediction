@@ -46,6 +46,8 @@ def make_price_weights(
     prices = pd.to_numeric(training_prices, errors="coerce").to_numpy(dtype=float)
     if prices.size == 0 or not np.isfinite(prices).all() or (prices <= 0).any():
         raise ValueError("Training prices must be finite, positive, and non-empty.")
+    if not np.isfinite(lower) or not np.isfinite(upper):
+        raise ValueError("Weight bounds must be finite.")
     if lower <= 0 or upper < lower:
         raise ValueError("Weight bounds must satisfy 0 < lower <= upper.")
 
