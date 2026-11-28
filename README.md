@@ -1,6 +1,6 @@
 # House Price Prediction
 
-A reproducible, modular regression project for the Ames Housing / Kaggle House Prices dataset. It includes data checks, exploratory analysis, engineered housing features, leakage-conscious preprocessing, six model families, cross-validation, model selection, metrics, diagnostics, a persisted pipeline, and a command-line prediction interface.
+A reproducible, modular regression project for the Ames Housing / Kaggle House Prices dataset. It includes data checks, exploratory analysis, engineered housing features, leakage-conscious preprocessing, seven candidate estimators, nested cross-validation, model selection, metrics, diagnostics, a persisted pipeline, and a command-line prediction interface.
 
 ## Dataset and scope
 
@@ -51,11 +51,8 @@ python -m venv .venv
 # Windows PowerShell: .venv\Scripts\Activate.ps1
 # macOS/Linux: source .venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Install development dependencies (optional)
-pip install -r requirements-dev.txt
+# Install the project and development/test extras used by CI
+pip install -e ".[dev]"
 
 # Install pre-commit hooks
 pre-commit install
@@ -102,9 +99,21 @@ The same deterministic feature function is applied to train and inference data. 
 
 ## Modeling and validation
 
-The project compares a median baseline, Ridge, Decision Tree, Random Forest, Extra Trees, Gradient Boosting, and HistGradientBoosting. It first reserves a final holdout that is excluded from all model and hyperparameter selection. Each tunable family receives the same bounded eight-iteration randomized search using shuffled five-fold CV on the training partition. The selected configuration from every family is then compared using the same repeated five-fold CV (five folds repeated twice) on that training partition. The untouched holdout is evaluated once for final diagnostics, after which the selected pipeline is refit on all labeled rows for test inference. Imputers, scalers, and encoders are fitted inside each cross-validation fold. All preprocessing is part of the saved sklearn Pipeline.
+The project compares **seven candidate estimators**: a median `DummyRegressor` baseline, Ridge, Decision Tree, Random Forest, Extra Trees, Gradient Boosting, and HistGradientBoosting.
 
-Metrics include MAE, MSE, RMSE, R² and RMSLE on the original price scale, plus cross-validation log-RMSE, its fold-to-fold standard deviation, training log-RMSE, validation log-RMSE, and their generalization gap. The training report records the selected model, search parameters, number of validation rows, target transform, and confirms that the holdout was not used for model selection. Each training execution generates fresh metrics and diagnostics in the workflow workspace. GitHub Actions uploads those outputs as the `training-reports` artifact for that exact run (seven-day retention); the files committed under `reports/` are repository snapshots and are not automatically rewritten by CI. Treat the artifact attached to the latest successful training run—not a checked-in report snapshot—as the authoritative current result.
+1. Reserve a final 20% holdout using a fixed random seed. It is excluded from all cross-validation, tuning, and model-family selection.
+2. Compare candidate families on the remaining training partition using **nested five-fold cross-validation**. Every family uses the same outer fold indices.
+3. For each tunable family and outer fold, run a bounded randomized search with **three-fold inner CV and up to three parameter candidates**. Outer validation rows are not passed to inner search or used to select parameters.
+4. Rank families only by mean outer-fold log-RMSE. Separate final training-partition tuning scores do not determine the family ranking.
+5. Tune tunable families on the full training partition to produce candidate pipelines. Families without search spaces receive a separate five-fold training CV estimate.
+6. Evaluate the selected candidate once on the untouched holdout and generate error diagnostics.
+7. After recording holdout results, refit the selected configuration on all labeled rows for the final inference pipeline. This deployment refit includes the holdout but does not change the already-recorded holdout metrics.
+
+Imputers, scalers, and encoders are fitted inside each CV fold as part of the sklearn `Pipeline`. The target is transformed with `log1p` and predictions are inverse-transformed with `expm1`.
+
+Metrics include MAE, MSE, RMSE, R², and RMSLE on the original price scale, plus nested-CV log-RMSE, fold-to-fold variation, training and holdout log-RMSE, and the generalization gap. Reports include model comparison, tuning results, outer-fold scores, residuals, worst errors, and error summaries by price band.
+
+Each training execution generates fresh metrics and diagnostics in its workflow workspace. GitHub Actions uploads those outputs as artifacts for the exact run (seven-day retention); files committed under `reports/` are repository snapshots and are not automatically rewritten by CI. Use the `training-reports` artifact attached to the latest successful training run as the authoritative result.
 
 ## Run
 
@@ -146,17 +155,12 @@ make predict
 ## Tests
 
 ```bash
-# Run all tests
 python -m pytest
-
-# Run with coverage
 python -m pytest --cov=src --cov-report=html
-
-# Run specific test file
 python -m pytest tests/test_preprocessing.py -v
 ```
 
-GitHub Actions runs pytest and linting on pushes and pull requests. The tests cover dataset loading, validation, missing-value handling, engineered features, preprocessing, exploratory analysis, prediction, and a small end-to-end estimator fit.
+Tests cover data loading and validation, missing-value handling, feature engineering, preprocessing, EDA outputs, prediction, estimator fitting, and nested-CV fold behavior. Nested-CV tests verify shared outer validation indices and that inner search receives only its corresponding outer-training partition.
 
 ## CI/CD
 
