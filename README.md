@@ -113,7 +113,7 @@ Imputers, scalers, and encoders are fitted inside each CV fold as part of the sk
 
 Metrics include MAE, MSE, RMSE, R², and RMSLE on the original price scale, plus nested-CV log-RMSE, fold-to-fold variation, training and holdout log-RMSE, and the generalization gap. Reports include model comparison, tuning results, outer-fold scores, residuals, worst errors, and error summaries by price band.
 
-Each training execution generates fresh metrics and diagnostics in its workflow workspace. GitHub Actions uploads those outputs as artifacts for the exact run (seven-day retention); files committed under `reports/` are repository snapshots and are not automatically rewritten by CI. Use the `training-reports` artifact attached to the latest successful training run as the authoritative result.
+Each training execution generates fresh metrics and diagnostics in its workflow workspace. GitHub Actions uploads those outputs as artifacts for the exact run (seven-day retention); files committed under `reports/` are repository snapshots and are not automatically rewritten by CI. The core model-comparison and validation metric snapshots are refreshed from time to time; the `training-reports` artifact attached to the latest successful training run remains the authoritative result.
 
 ## Run
 
@@ -201,7 +201,7 @@ A separate experiment evaluates the fixed Gradient Boosting configuration across
 
 These are repeated random holdouts on the same dataset, not independent external test sets. Observations can appear in validation partitions across different seeds, so the reported variability measures sensitivity to the random split and must not be interpreted as a deployment confidence interval. The experiment is complementary to the single untouched holdout used by the primary training workflow; it does not replace external validation.
 
-The robustness experiment's fixed GradientBoosting parameters are `n_estimators=500`, `learning_rate=0.05`, `max_depth=3`, `min_samples_leaf=2`, `subsample=0.8`, `loss='huber'`, and `alpha=0.95` (with the project random state). These match the selected configuration recorded in the latest successful training artifact for PR #1.
+The robustness experiment's fixed GradientBoosting parameters are `n_estimators=500`, `learning_rate=0.05`, `max_depth=3`, `min_samples_leaf=2`, `subsample=0.8`, `loss='huber'`, and `alpha=0.95` (with the project random state). These are the fixed parameters used by the robustness experiment. This experiment evaluates a preselected Gradient Boosting configuration and is separate from the primary nested-CV model-family selection, which may select a different estimator.
 
 ## Limitations and future work
 

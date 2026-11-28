@@ -1,14 +1,43 @@
 {
-  "MAE": 16496.65136641402,
-  "MSE": 878288322.7082283,
-  "RMSE": 29635.929590755684,
-  "R2": 0.8854953102404866,
-  "RMSLE": 0.13638051814679758,
-  "selected_model": "GradientBoosting",
+  "MAE": 16204.791692486957,
+  "MSE": 851628619.2260381,
+  "RMSE": 29182.67669741825,
+  "R2": 0.8889710038110168,
+  "RMSLE": 0.13671677812167302,
+  "baseline_MAE": 59568.25000000003,
+  "baseline_MSE": 7861866593.523976,
+  "baseline_RMSE": 88667.1675059262,
+  "baseline_R2": -0.024971608920278943,
+  "baseline_RMSLE": 0.4322831133126541,
+  "holdout_RMSE_improvement_vs_baseline": 0.6708739264117376,
+  "selected_model": "HistGradientBoosting",
   "best_params": {
-    "model__n_estimators": 350,
-    "model__max_depth": 2,
-    "model__learning_rate": 0.05
+    "model__max_leaf_nodes": 7,
+    "model__max_iter": 400,
+    "model__learning_rate": 0.04,
+    "model__l2_regularization": 0.0
   },
-  "validation_rows": 292
+  "validation_rows": 292,
+  "nested_cv_outer_folds": 5,
+  "nested_cv_inner_folds": 3,
+  "nested_cv_search_iterations_per_family": 3,
+  "selected_family_cv_log_rmse_mean": 0.12615844466803972,
+  "selected_family_cv_log_rmse_std": 0.017562880552293117,
+  "in_sample_train_log_rmse": 0.07159569423436853,
+  "validation_log_rmse": 0.13671677812167302,
+  "tuned_cv_log_rmse_mean": 0.12203653967491312,
+  "tuned_cv_log_rmse_std": 0.014297375418987205,
+  "validation_minus_tuned_cv_log_rmse": 0.014680238446759891,
+  "target_transform": "log1p; predictions inverse-transformed with expm1",
+  "holdout_used_for_model_selection": false,
+  "validation_error_reports": [
+    "validation_residuals.csv",
+    "worst_validation_errors.csv",
+    "validation_error_by_price_band.csv",
+    "model_comparison.csv",
+    "tuning_comparison.csv",
+    "nested_cv_outer_fold_results.csv"
+  ],
+  "cv_metric_note": "Model families are compared using nested five-fold CV. In each outer fold, hyperparameter tuning uses only the outer training partition with three-fold CV and a three-iteration randomized search. Outer validation folds are never used for tuning. After nested evaluation, tunable families receive a separate search on the full training partition. Families without search spaces receive a separate five-fold training CV estimate. Neither is used for family ranking. The validation holdout is excluded from nested CV, tuning, and model selection, and is used only for final evaluation and post-selection explanation. After reporting those results, the saved final pipeline is refit on all labeled training rows, including the holdout, for deployment; that refit does not change the reported holdout metrics.",
+  "feature_importance_method": "Validation permutation importance is generated after model selection for explanation only; it is not used for fitting, tuning, or selecting the model."
 }
